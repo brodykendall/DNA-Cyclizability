@@ -46,3 +46,10 @@ gnns/processed/*
 irlstm_architectures/results/*
 lgbm/results/*
 model/*.rds
+model/reduced/ps1-int/*.rds
+model/reduced/ps1-int/*.txt
+model/cycle5-pearson-no-interaction/*.rds
+ModelArchitectureSchematics/*
+prediction/predict_post_smoothed/log_files/*
+prediction/predict_post_smoothed/models/*
+supp3_xu_et_al.xls
