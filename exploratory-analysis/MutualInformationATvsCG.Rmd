@@ -1,0 +1,1087 @@
+---
+title: "MutualInformationATvsCG"
+author: "Brody Kendall"
+date: "7/11/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(igraph)
+library(infotheo)
+library(ggplot2)
+```
+
+```{r}
+cutoffs_0_25 = quantile(dat_seq$C0, c(0, 0.25)) 
+cutoffs_25_50 = quantile(dat_seq$C0, c(0.25, 0.5))
+cutoffs_50_75 = quantile(dat_seq$C0, c(0.5, 0.75))
+cutoffs_75_100 = quantile(dat_seq$C0, c(0.75, 1))
+```
+
+
+```{r}
+## Need to create A or T 0-1 feature for nucleotides and dinucleotides:
+sequence_1AT_df <- dat %>%
+  pull(x50mer) %>%
+  sequence_df_AT()
+
+sequence_2_df <- dat %>%
+  pull(x50mer) %>%
+  map(~unlist(strsplit(.x, ""))) %>%
+  map(~splitWithOverlap(.x, 2, 1)) %>%
+  map_depth(2, paste0, collapse = "") %>%
+  map(unlist) %>%
+  unlist() %>%
+  {matrix(., nrow = nrow(dat), byrow = TRUE)} %>%
+  data.frame(stringsAsFactors = FALSE)
+
+dat_seq_AT = dat_seq
+
+for(i in 1:50) {
+  dat_seq_AT = dat_seq_AT %>% 
+    mutate(assign(paste0("X",i,"monoAT"),
+             ifelse(get(paste0("X",i,"mono")) == "A"| get(paste0("X",i,"mono")) == "T", 1, 0)))
+}
+
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X1monoAT = ifelse(X1mono == "A" | X1mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X2monoAT = ifelse(X2mono == "A" | X2mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X3monoAT = ifelse(X3mono == "A" | X3mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X4monoAT = ifelse(X4mono == "A" | X4mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X5monoAT = ifelse(X5mono == "A" | X5mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X6monoAT = ifelse(X6mono == "A" | X6mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X7monoAT = ifelse(X7mono == "A" | X7mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X8monoAT = ifelse(X8mono == "A" | X8mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X9monoAT = ifelse(X9mono == "A" | X9mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X10monoAT = ifelse(X10mono == "A" | X10mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X11monoAT = ifelse(X11mono == "A" | X11mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X12monoAT = ifelse(X12mono == "A" | X12mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X13monoAT = ifelse(X13mono == "A" | X13mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X14monoAT = ifelse(X14mono == "A" | X14mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X15monoAT = ifelse(X15mono == "A" | X15mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X16monoAT = ifelse(X16mono == "A" | X16mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X17monoAT = ifelse(X17mono == "A" | X17mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X18monoAT = ifelse(X18mono == "A" | X18mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X19monoAT = ifelse(X19mono == "A" | X19mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X20monoAT = ifelse(X20mono == "A" | X20mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X21monoAT = ifelse(X21mono == "A" | X21mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X22monoAT = ifelse(X22mono == "A" | X22mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X23monoAT = ifelse(X23mono == "A" | X23mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X24monoAT = ifelse(X24mono == "A" | X24mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X25monoAT = ifelse(X25mono == "A" | X25mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X26monoAT = ifelse(X26mono == "A" | X26mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X27monoAT = ifelse(X27mono == "A" | X27mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X28monoAT = ifelse(X28mono == "A" | X28mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X29monoAT = ifelse(X29mono == "A" | X29mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X30monoAT = ifelse(X30mono == "A" | X30mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X31monoAT = ifelse(X31mono == "A" | X31mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X32monoAT = ifelse(X32mono == "A" | X32mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X33monoAT = ifelse(X33mono == "A" | X33mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X34monoAT = ifelse(X34mono == "A" | X34mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X35monoAT = ifelse(X35mono == "A" | X35mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X36monoAT = ifelse(X36mono == "A" | X36mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X37monoAT = ifelse(X37mono == "A" | X37mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X38monoAT = ifelse(X38mono == "A" | X38mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X39monoAT = ifelse(X39mono == "A" | X39mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X40monoAT = ifelse(X40mono == "A" | X40mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X41monoAT = ifelse(X41mono == "A" | X41mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X42monoAT = ifelse(X42mono == "A" | X42mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X43monoAT = ifelse(X43mono == "A" | X43mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X44monoAT = ifelse(X44mono == "A" | X44mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X45monoAT = ifelse(X45mono == "A" | X45mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X46monoAT = ifelse(X46mono == "A" | X46mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X47monoAT = ifelse(X47mono == "A" | X47mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X48monoAT = ifelse(X48mono == "A" | X48mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X49monoAT = ifelse(X49mono == "A" | X49mono == "T", 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X50monoAT = ifelse(X50mono == "A" | X50mono == "T", 1, 0))
+
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X1diAT = ifelse(grepl("A", X1di, fixed = TRUE) | grepl("T", X1di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X2diAT = ifelse(grepl("A", X2di, fixed = TRUE) | grepl("T", X2di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X3diAT = ifelse(grepl("A", X3di, fixed = TRUE) | grepl("T", X3di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X4diAT = ifelse(grepl("A", X4di, fixed = TRUE) | grepl("T", X4di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X5diAT = ifelse(grepl("A", X5di, fixed = TRUE) | grepl("T", X5di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X6diAT = ifelse(grepl("A", X6di, fixed = TRUE) | grepl("T", X6di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X7diAT = ifelse(grepl("A", X7di, fixed = TRUE) | grepl("T", X7di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X8diAT = ifelse(grepl("A", X8di, fixed = TRUE) | grepl("T", X8di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X9diAT = ifelse(grepl("A", X9di, fixed = TRUE) | grepl("T", X9di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X10diAT = ifelse(grepl("A", X10di, fixed = TRUE) | grepl("T", X10di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X11diAT = ifelse(grepl("A", X11di, fixed = TRUE) | grepl("T", X11di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X12diAT = ifelse(grepl("A", X12di, fixed = TRUE) | grepl("T", X12di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X13diAT = ifelse(grepl("A", X13di, fixed = TRUE) | grepl("T", X13di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X14diAT = ifelse(grepl("A", X14di, fixed = TRUE) | grepl("T", X14di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X15diAT = ifelse(grepl("A", X15di, fixed = TRUE) | grepl("T", X15di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X16diAT = ifelse(grepl("A", X16di, fixed = TRUE) | grepl("T", X16di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X17diAT = ifelse(grepl("A", X17di, fixed = TRUE) | grepl("T", X17di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X18diAT = ifelse(grepl("A", X18di, fixed = TRUE) | grepl("T", X18di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X19diAT = ifelse(grepl("A", X19di, fixed = TRUE) | grepl("T", X19di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X20diAT = ifelse(grepl("A", X20di, fixed = TRUE) | grepl("T", X20di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X21diAT = ifelse(grepl("A", X21di, fixed = TRUE) | grepl("T", X21di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X22diAT = ifelse(grepl("A", X22di, fixed = TRUE) | grepl("T", X22di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X23diAT = ifelse(grepl("A", X23di, fixed = TRUE) | grepl("T", X23di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X24diAT = ifelse(grepl("A", X24di, fixed = TRUE) | grepl("T", X24di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X25diAT = ifelse(grepl("A", X25di, fixed = TRUE) | grepl("T", X25di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X26diAT = ifelse(grepl("A", X26di, fixed = TRUE) | grepl("T", X26di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X27diAT = ifelse(grepl("A", X27di, fixed = TRUE) | grepl("T", X27di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X28diAT = ifelse(grepl("A", X28di, fixed = TRUE) | grepl("T", X28di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X29diAT = ifelse(grepl("A", X29di, fixed = TRUE) | grepl("T", X29di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X30diAT = ifelse(grepl("A", X30di, fixed = TRUE) | grepl("T", X30di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X31diAT = ifelse(grepl("A", X31di, fixed = TRUE) | grepl("T", X31di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X32diAT = ifelse(grepl("A", X32di, fixed = TRUE) | grepl("T", X32di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X33diAT = ifelse(grepl("A", X33di, fixed = TRUE) | grepl("T", X33di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X34diAT = ifelse(grepl("A", X34di, fixed = TRUE) | grepl("T", X34di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X35diAT = ifelse(grepl("A", X35di, fixed = TRUE) | grepl("T", X35di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X36diAT = ifelse(grepl("A", X36di, fixed = TRUE) | grepl("T", X36di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X37diAT = ifelse(grepl("A", X37di, fixed = TRUE) | grepl("T", X37di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X38diAT = ifelse(grepl("A", X38di, fixed = TRUE) | grepl("T", X38di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X39diAT = ifelse(grepl("A", X39di, fixed = TRUE) | grepl("T", X39di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X40diAT = ifelse(grepl("A", X40di, fixed = TRUE) | grepl("T", X40di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X41diAT = ifelse(grepl("A", X41di, fixed = TRUE) | grepl("T", X41di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X42diAT = ifelse(grepl("A", X42di, fixed = TRUE) | grepl("T", X42di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X43diAT = ifelse(grepl("A", X43di, fixed = TRUE) | grepl("T", X43di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X44diAT = ifelse(grepl("A", X44di, fixed = TRUE) | grepl("T", X44di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X45diAT = ifelse(grepl("A", X45di, fixed = TRUE) | grepl("T", X45di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X46diAT = ifelse(grepl("A", X46di, fixed = TRUE) | grepl("T", X46di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X47diAT = ifelse(grepl("A", X47di, fixed = TRUE) | grepl("T", X47di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X48diAT = ifelse(grepl("A", X48di, fixed = TRUE) | grepl("T", X48di, fixed = TRUE), 1, 0))
+dat_seq_AT = dat_seq_AT %>%
+  mutate(X49diAT = ifelse(grepl("A", X49di, fixed = TRUE) | grepl("T", X49di, fixed = TRUE), 1, 0))
+```
+
+
+```{r}
+dat_q1_AT = dat_seq_AT %>%
+  filter(C0 >= cutoffs_0_25[1] & C0 <= cutoffs_0_25[2]) %>%
+  select(all_of(paste0(ps1, "AT")), all_of(paste0(ps2, "AT")), C0)
+
+d_q1_AT = as.data.frame(matrix(nrow = 1225, ncol = 3))
+colnames(d_q1_AT) = c("Var1", "Var2", "MI")
+z=1
+for(i in 1:49) {
+  for(j in (i+1):50) {
+    d_q1_AT[z, "Var1"] = i
+    d_q1_AT[z, "Var2"] = j
+    d_q1_AT[z, "MI"] = mutinformation(dat_q1_AT[,paste0("X", i, "monoAT")], 
+                                      dat_q1_AT[,paste0("X", j, "monoAT")])
+    z=z+1
+  }
+}
+
+d_q1_AT.ord <- d_q1_AT
+
+vertex.size = 5
+edge.scalar = 200
+text.size = 10
+number.vertices = 150
+d_q1_AT = d_q1_AT %>%
+  arrange(desc(MI))
+g_q1_AT = graph_from_data_frame(d_q1_AT[1:number.vertices,], directed=FALSE)
+# plot(g_q1, vertex.size = vertex.size, edge.width = E(g_q1)$MI*edge.scalar, cex = text.size, layout = layout.circle, order = order(as.numeric(names(V(g_q1)))))
+# plot(g_q1, vertex.size = vertex.size, edge.width = E(g_q1)$MI*edge.scalar, cex = text.size, layout = layout.circle)
+coords_q1_AT <- layout_in_circle(g_q1_AT, order =
+                                order(as.numeric(names(V(g_q1_AT)))))
+plot(g_q1_AT, vertex.size = vertex.size, edge.width = E(g_q1_AT)$MI*edge.scalar, cex = text.size, layout = coords_q1_AT, vertex.shape = "none")
+```
+
+```{r}
+dat_q2_AT = dat_seq_AT %>%
+  filter(C0 >= cutoffs_25_50[1] & C0 <= cutoffs_25_50[2]) %>%
+  select(all_of(paste0(ps1,"AT")), all_of(paste0(ps2,"AT")), C0)
+
+d_q2_AT = as.data.frame(matrix(nrow = 1225, ncol = 3))
+colnames(d_q2_AT) = c("Var1", "Var2", "MI")
+z=1
+for(i in 1:49) {
+  for(j in (i+1):50) {
+    d_q2_AT[z, "Var1"] = i
+    d_q2_AT[z, "Var2"] = j
+    d_q2_AT[z, "MI"] = mutinformation(dat_q2_AT[,paste0("X", i, "monoAT")], dat_q2_AT[,paste0("X", j, "monoAT")])
+    z=z+1
+  }
+}
+
+d_q2_AT = d_q2_AT %>%
+  arrange(desc(MI))
+g_q2_AT = graph_from_data_frame(d_q2_AT[1:number.vertices,], directed=FALSE)
+
+coords_q2_AT <- layout_in_circle(g_q2_AT, order =
+                                order(as.numeric(names(V(g_q2_AT)))))
+plot(g_q2_AT, vertex.size = vertex.size, edge.width = E(g_q2_AT)$MI*edge.scalar, cex = text.size, layout = coords_q2_AT, vertex.shape = "none")
+```
+
+```{r}
+dat_q3_AT = dat_seq_AT %>%
+  filter(C0 >= cutoffs_50_75[1] & C0 <= cutoffs_50_75[2]) %>%
+  select(all_of(paste0(ps1, "AT")), all_of(paste0(ps2, "AT")), C0)
+
+d_q3_AT = as.data.frame(matrix(nrow = 1225, ncol = 3))
+colnames(d_q3_AT) = c("Var1", "Var2", "MI")
+z=1
+for(i in 1:49) {
+  for(j in (i+1):50) {
+    d_q3_AT[z, "Var1"] = i
+    d_q3_AT[z, "Var2"] = j
+    d_q3_AT[z, "MI"] = mutinformation(dat_q3_AT[,paste0("X", i, "monoAT")], dat_q3_AT[,paste0("X", j, "monoAT")])
+    z=z+1
+  }
+}
+
+d_q3_AT = d_q3_AT %>%
+  arrange(desc(MI))
+g_q3_AT = graph_from_data_frame(d_q3_AT[1:number.vertices,], directed=FALSE)
+coords_q3_AT <- layout_in_circle(g_q3_AT, order =
+                                order(as.numeric(names(V(g_q3_AT)))))
+plot(g_q3_AT, vertex.size = vertex.size, edge.width = E(g_q3_AT)$MI*edge.scalar, cex = text.size, layout = coords_q3_AT, vertex.shape = "none")
+```
+
+```{r}
+dat_q4_AT = dat_seq_AT %>%
+  filter(C0 >= cutoffs_75_100[1] & C0 <= cutoffs_75_100[2]) %>%
+  select(all_of(paste0(ps1, "AT")), all_of(paste0(ps2, "AT")), C0)
+
+d_q4_AT = as.data.frame(matrix(nrow = 1225, ncol = 3))
+colnames(d_q4_AT) = c("Var1", "Var2", "MI")
+z=1
+for(i in 1:49) {
+  for(j in (i+1):50) {
+    d_q4_AT[z, "Var1"] = i
+    d_q4_AT[z, "Var2"] = j
+    d_q4_AT[z, "MI"] = mutinformation(dat_q4_AT[,paste0("X", i, "monoAT")], dat_q4_AT[,paste0("X", j, "monoAT")])
+    z=z+1
+  }
+}
+
+d_q4_AT.ord <- d_q4_AT
+
+vertex.size = 5
+edge.scalar = 800
+text.size = 7
+number.vertices = 150
+
+d_q4_AT = d_q4_AT %>%
+  arrange(desc(MI))
+g_q4_AT = graph_from_data_frame(d_q4_AT[1:number.vertices,], directed=FALSE)
+coords_q4_AT <- layout_in_circle(g_q4_AT, order =
+                                order(as.numeric(names(V(g_q4_AT)))))
+plot(g_q4_AT, vertex.size = vertex.size, edge.width = E(g_q4_AT)$MI*edge.scalar, cex = text.size, layout = coords_q4_AT, vertex.shape = "none")
+```
+
+```{r}
+vertex.size = 5
+edge.scalar = 400
+text.size = 10
+number.vertices = 150
+par(mfrow = c(2,1))
+plot(g_q1_AT, vertex.size = vertex.size, edge.width = E(g_q1_AT)$MI*edge.scalar, cex = text.size, layout = coords_q1_AT, vertex.shape = "none", main="Nucleotides, First Quartile")
+# plot(g_q2, vertex.size = vertex.size, edge.width = E(g_q2)$MI*edge.scalar, cex = text.size, layout = coords_q2, vertex.shape = "none", main="Nucleotides, Second Quartile")
+# plot(g_q3, vertex.size = vertex.size, edge.width = E(g_q3)$MI*edge.scalar, cex = text.size, layout = coords_q3, vertex.shape = "none", main="Nucleotides, Third Quartile")
+plot(g_q4_AT, vertex.size = vertex.size, edge.width = E(g_q4_AT)$MI*edge.scalar, cex = text.size, layout = coords_q4_AT, vertex.shape = "none", main="Nucleotides, Fourth Quartile")
+
+
+mono_int_indices = c(6,9,10,12,15,21)
+d_q1_AT.nc = d_q1_AT %>%
+  filter(Var2 - Var1 >= 3) %>%
+  mutate(d = Var2 - Var1) %>%
+  mutate(color_edge = (d %in% mono_int_indices))
+g_q1_AT.nc = graph_from_data_frame(d_q1_AT.nc[1:number.vertices,], directed=FALSE)
+coords_q1_AT.nc <- layout_in_circle(g_q1_AT.nc, order =
+                                   order(as.numeric(names(V(g_q1_AT.nc)))))
+E(g_q1_AT.nc)$color[E(g_q1_AT.nc)$color_edge == TRUE] <- 'red'
+E(g_q1_AT.nc)$color[E(g_q1_AT.nc)$color_edge == FALSE] <- 'grey'
+plot(g_q1_AT.nc, vertex.size = vertex.size, edge.width = E(g_q1_AT.nc)$MI*edge.scalar, cex = text.size, layout = coords_q1_AT.nc, vertex.shape = "none")
+d_q4_AT.nc = d_q4_AT %>%
+  filter(Var2 - Var1 >= 3) %>%
+  mutate(d = Var2 - Var1) %>%
+  mutate(color_edge = (d %in% mono_int_indices))
+g_q4_AT.nc = graph_from_data_frame(d_q4_AT.nc[1:number.vertices,], directed=FALSE)
+coords_q4_AT.nc <- layout_in_circle(g_q4_AT.nc, order =
+                                   order(as.numeric(names(V(g_q4_AT.nc)))))
+E(g_q4_AT.nc)$color[E(g_q4_AT.nc)$color_edge == TRUE] <- 'red'
+E(g_q4_AT.nc)$color[E(g_q4_AT.nc)$color_edge == FALSE] <- 'grey'
+plot(g_q4_AT.nc, vertex.size = vertex.size, edge.width = E(g_q4_AT.nc)$MI*edge.scalar, cex = text.size, layout = coords_q4_AT.nc, vertex.shape = "none")
+# save.image(file = "MI_nucleotide_noncodon")
+
+d_q2_AT.nc = d_q2_AT %>%
+  filter(Var2 - Var1 >= 3)
+d_q3_AT.nc = d_q3_AT %>%
+  filter(Var2 - Var1 >= 3)
+
+d_q1_AT.nc.display = d_q1_AT.nc %>%
+  mutate(d = Var2 - Var1) %>%
+  top_n(20, MI)
+
+d_q2_AT.nc.display = d_q2_AT.nc %>%
+  mutate(d = Var2 - Var1) %>%
+  top_n(20, MI)
+
+d_q3_AT.nc.display = d_q3_AT.nc %>%
+  mutate(d = Var2 - Var1) %>%
+  top_n(20, MI)
+
+d_q4_AT.nc.display = d_q4_AT.nc %>%
+  mutate(d = Var2 - Var1) %>%
+  top_n(20, MI)
+
+### OR
+
+d_q1_AT.nc.display = d_q1_AT.nc %>%
+  mutate(d = Var2 - Var1) %>%
+  group_by(d) %>%
+  summarise(avg_MI = round(mean(MI), 5)) %>%
+  top_n(4, avg_MI) %>%
+  arrange(desc(avg_MI))
+
+d_q2_AT.nc.display = d_q2_AT.nc %>%
+  mutate(d = Var2 - Var1) %>%
+  group_by(d) %>%
+  summarise(avg_MI = round(mean(MI), 5)) %>%
+  top_n(4, avg_MI) %>%
+  arrange(desc(avg_MI))
+
+d_q3_AT.nc.display = d_q3_AT.nc %>%
+  mutate(d = Var2 - Var1) %>%
+  group_by(d) %>%
+  summarise(avg_MI = round(mean(MI), 5)) %>%
+  top_n(4, avg_MI) %>%
+  arrange(desc(avg_MI))
+
+d_q4_AT.nc.display = d_q4_AT.nc %>%
+  mutate(d = Var2 - Var1) %>%
+  group_by(d) %>%
+  summarise(avg_MI = round(mean(MI), 5)) %>%
+  top_n(4, avg_MI) %>%
+  arrange(desc(avg_MI))
+
+grid.table(d_q1_AT.nc.display)
+grid.table(d_q2_AT.nc.display)
+grid.table(d_q3_AT.nc.display)
+grid.table(d_q4_AT.nc.display)
+```
+
+
+```{r}
+# # Nucleotide, Non-Codon Regions
+# vertex.size = 5
+# edge.scalar = 400
+# text.size = 10
+# number.vertices = 100
+# par(mfrow = c(2,1))
+# d_q1_AT.nc = d_q1_AT %>%
+#   filter(Var2 - Var1 >= 3)
+# g_q1_AT.nc = graph_from_data_frame(d_q1_AT.nc[1:number.vertices,], directed=FALSE)
+# coords_q1_AT.nc <- layout_in_circle(g_q1_AT.nc, order =
+#                                    order(as.numeric(names(V(g_q1_AT.nc)))))
+# plot(g_q1_AT.nc, vertex.size = vertex.size, edge.width = E(g_q1_AT.nc)$MI*edge.scalar, cex = text.size, layout = coords_q1_AT.nc, vertex.shape = "none", main="First Quartile")
+# d_q4_AT.nc = d_q4_AT %>%
+#   filter(Var2 - Var1 >= 3)
+# g_q4_AT.nc = graph_from_data_frame(d_q4_AT.nc[1:number.vertices,], directed=FALSE)
+# coords_q4_AT.nc <- layout_in_circle(g_q4_AT.nc, order =
+#                                    order(as.numeric(names(V(g_q4_AT.nc)))))
+# plot(g_q4_AT.nc, vertex.size = vertex.size, edge.width = E(g_q4_AT.nc)$MI*edge.scalar, cex = text.size, layout = coords_q4_AT.nc, vertex.shape = "none", main="Fourth Quartile")
+# #Saved image as "MI_nucleotide_noncodon_q4.png"
+```
+
+
+
+
+```{r}
+d_q1_AT.ps2 = as.data.frame(matrix(nrow = 1176, ncol = 3))
+colnames(d_q1_AT.ps2) = c("Var1", "Var2", "MI")
+z=1
+for(i in 1:48) {
+  for(j in (i+1):49) {
+    d_q1_AT.ps2[z, "Var1"] = i
+    d_q1_AT.ps2[z, "Var2"] = j
+    d_q1_AT.ps2[z, "MI"] = mutinformation(dat_q1_AT[,paste0("X", i, "diAT")], dat_q1_AT[,paste0("X", j, "diAT")])
+    z=z+1
+  }
+}
+
+vertex.size = 5
+edge.scalar = 2
+text.size = 10
+number.vertices = 150
+d_q1_AT.ps2 = d_q1_AT.ps2 %>%
+  arrange(desc(MI))
+
+# g_q1.ps2 = graph_from_data_frame(d_q1.ps2[1:number.vertices,], directed=FALSE)
+
+# plot(g_q1.ps2, vertex.size = vertex.size, edge.width = E(g_q1.ps2)$MI*edge.scalar, cex = text.size, layout = coords_q1.ps2, vertex.shape = "none")
+```
+
+```{r}
+d_q2_AT.ps2 = as.data.frame(matrix(nrow = 1176, ncol = 3))
+colnames(d_q2_AT.ps2) = c("Var1", "Var2", "MI")
+z=1
+for(i in 1:48) {
+  for(j in (i+1):49) {
+    d_q2_AT.ps2[z, "Var1"] = i
+    d_q2_AT.ps2[z, "Var2"] = j
+    d_q2_AT.ps2[z, "MI"] = mutinformation(dat_q2_AT[,paste0("X", i, "diAT")], dat_q2_AT[,paste0("X", j, "diAT")])
+    z=z+1
+  }
+}
+
+d_q2_AT.ps2 = d_q2_AT.ps2 %>%
+  arrange(desc(MI))
+# g_q2.ps2 = graph_from_data_frame(d_q2.ps2[1:number.vertices,], directed=FALSE)
+# plot(g_q2.ps2, vertex.size = vertex.size, edge.width = E(g_q2.ps2)$MI*edge.scalar, cex = text.size)
+```
+
+```{r}
+d_q3_AT.ps2 = as.data.frame(matrix(nrow = 1176, ncol = 3))
+colnames(d_q3_AT.ps2) = c("Var1", "Var2", "MI")
+z=1
+for(i in 1:48) {
+  for(j in (i+1):49) {
+    d_q3_AT.ps2[z, "Var1"] = i
+    d_q3_AT.ps2[z, "Var2"] = j
+    d_q3_AT.ps2[z, "MI"] = mutinformation(dat_q3_AT[,paste0("X", i, "diAT")], dat_q3_AT[,paste0("X", j, "diAT")])
+    z=z+1
+  }
+}
+
+d_q3_AT.ps2 = d_q3_AT.ps2 %>%
+  arrange(desc(MI))
+# g_q3.ps2 = graph_from_data_frame(d_q.ps2[1:number.vertices,], directed=FALSE)
+
+# plot(g_q3.ps2, vertex.size = vertex.size, edge.width = E(g_q3.ps2)$MI*edge.scalar, cex = text.size)
+```
+
+```{r}
+d_q4_AT.ps2 = as.data.frame(matrix(nrow = 1176, ncol = 3))
+colnames(d_q4_AT.ps2) = c("Var1", "Var2", "MI")
+z=1
+for(i in 1:48) {
+  for(j in (i+1):49) {
+    d_q4_AT.ps2[z, "Var1"] = i
+    d_q4_AT.ps2[z, "Var2"] = j
+    d_q4_AT.ps2[z, "MI"] = mutinformation(dat_q4_AT[,paste0("X", i, "diAT")], dat_q4_AT[,paste0("X", j, "diAT")])
+    z=z+1
+  }
+}
+
+d_q4_AT.ps2 = d_q4_AT.ps2 %>%
+  arrange(desc(MI))
+# plot(g_q4.ps2, vertex.size = vertex.size, edge.width = E(g_q4.ps2)$MI*edge.scalar, cex = text.size)
+```
+
+```{r}
+vertex.size = 15
+edge.scalar = 2000
+text.size = 5
+number.vertices = 200
+
+par(mfrow = c(2,2))
+
+g_q1_AT.ps2 = graph_from_data_frame(d_q1_AT.ps2[49:(48+number.vertices),], directed=FALSE)
+coords_q1_AT.ps2 <- layout_in_circle(g_q1_AT.ps2, order =
+                                    order(as.numeric(names(V(g_q1_AT.ps2)))))
+plot(g_q1_AT.ps2, vertex.size = vertex.size, edge.width = E(g_q1_AT.ps2)$MI*edge.scalar, cex = text.size, layout = coords_q1_AT.ps2, vertex.shape = "none", main="Dinucleotides, First Quartile")
+
+
+g_q2_AT.ps2 = graph_from_data_frame(d_q2_AT.ps2[49:(48+number.vertices),], directed=FALSE)
+coords_q2_AT.ps2 <- layout_in_circle(g_q2_AT.ps2, order =
+                                    order(as.numeric(names(V(g_q2_AT.ps2)))))
+plot(g_q2_AT.ps2, vertex.size = vertex.size, edge.width = E(g_q2_AT.ps2)$MI*edge.scalar, cex = text.size, layout = coords_q2_AT.ps2, vertex.shape = "none", main="Dinucleotides, Second Quartile")
+
+
+g_q3_AT.ps2 = graph_from_data_frame(d_q3_AT.ps2[49:(48+number.vertices),], directed=FALSE)
+coords_q3_AT.ps2 <- layout_in_circle(g_q3_AT.ps2, order =
+                                    order(as.numeric(names(V(g_q3_AT.ps2)))))
+plot(g_q3_AT.ps2, vertex.size = vertex.size, edge.width = E(g_q3_AT.ps2)$MI*edge.scalar, cex = text.size, layout = coords_q3_AT.ps2, vertex.shape = "none", main="Dinucleotides, Third Quartile")
+
+
+g_q4_AT.ps2 = graph_from_data_frame(d_q4_AT.ps2[49:(48+number.vertices),], directed=FALSE)
+coords_q4_AT.ps2 <- layout_in_circle(g_q4_AT.ps2, order =
+                                    order(as.numeric(names(V(g_q4_AT.ps2)))))
+plot(g_q4_AT.ps2, vertex.size = vertex.size, edge.width = E(g_q4_AT.ps2)$MI*edge.scalar, cex = text.size, layout = coords_q4_AT.ps2, vertex.shape = "none", main="Dinucleotides, Fourth Quartile")
+
+
+vertex.size = 15
+edge.scalar = 400
+text.size = 5
+number.vertices = 100
+
+vertex.size = 5
+edge.scalar = 2000
+text.size = 10
+number.vertices = 150
+
+di_int_indices = c(3,4,5,8,9,10,11,14,20)
+d_q1_AT.ps2 = d_q1_AT.ps2 %>%
+  filter(Var2 - Var1 >= 3) %>%
+  mutate(d = Var2 - Var1 - 1) %>%
+  mutate(color_edge = (d %in% di_int_indices))
+g_q1_AT.ps2 = graph_from_data_frame(d_q1_AT.ps2[1:number.vertices,], directed=FALSE)
+coords_q1_AT.ps2 <- layout_in_circle(g_q1_AT.ps2, order =
+                                    order(as.numeric(names(V(g_q1_AT.ps2)))))
+E(g_q1_AT.ps2)$color[E(g_q1_AT.ps2)$color_edge == TRUE] <- 'red'
+E(g_q1_AT.ps2)$color[E(g_q1_AT.ps2)$color_edge == FALSE] <- 'grey'
+plot(g_q1_AT.ps2, vertex.size = vertex.size, edge.width = E(g_q1_AT.ps2)$MI*edge.scalar, cex = text.size, layout = coords_q1_AT.ps2, vertex.shape = "none")
+
+d_q2_AT.ps2 = d_q2_AT.ps2 %>%
+  filter(Var2 - Var1 >= 3)
+g_q2_AT.ps2 = graph_from_data_frame(d_q2_AT.ps2[1:number.vertices,], directed=FALSE)
+coords_q2_AT.ps2 <- layout_in_circle(g_q2_AT.ps2, order =
+                                    order(as.numeric(names(V(g_q2_AT.ps2)))))
+plot(g_q2_AT.ps2, vertex.size = vertex.size, edge.width = E(g_q2_AT.ps2)$MI*edge.scalar, cex = text.size, layout = coords_q2_AT.ps2, vertex.shape = "none", main="Dinucleotides, Second Quartile")
+
+d_q3_AT.ps2 = d_q3_AT.ps2 %>%
+  filter(Var2 - Var1 >= 3)
+g_q3_AT.ps2 = graph_from_data_frame(d_q3_AT.ps2[1:number.vertices,], directed=FALSE)
+coords_q3_AT.ps2 <- layout_in_circle(g_q3_AT.ps2, order =
+                                    order(as.numeric(names(V(g_q3_AT.ps2)))))
+plot(g_q3_AT.ps2, vertex.size = vertex.size, edge.width = E(g_q3_AT.ps2)$MI*edge.scalar, cex = text.size, layout = coords_q3_AT.ps2, vertex.shape = "none", main="Dinucleotides, Third Quartile")
+
+d_q4_AT.ps2 = d_q4_AT.ps2 %>%
+  filter(Var2 - Var1 >= 3) %>%
+  mutate(d = Var2 - Var1 - 1) %>%
+  mutate(color_edge = (d %in% di_int_indices))
+g_q4_AT.ps2 = graph_from_data_frame(d_q4_AT.ps2[1:number.vertices,], directed=FALSE)
+coords_q4_AT.ps2 <- layout_in_circle(g_q4_AT.ps2, order =
+                                    order(as.numeric(names(V(g_q4_AT.ps2)))))
+E(g_q4_AT.ps2)$color[E(g_q4_AT.ps2)$color_edge == TRUE] <- 'red'
+E(g_q4_AT.ps2)$color[E(g_q4_AT.ps2)$color_edge == FALSE] <- 'grey'
+plot(g_q4_AT.ps2, vertex.size = vertex.size, edge.width = E(g_q4_AT.ps2)$MI*edge.scalar, cex = text.size, layout = coords_q4_AT.ps2, vertex.shape = "none")
+
+
+
+plot(g_q1_AT.ps2, vertex.size = vertex.size, edge.width = E(g_q1_AT.ps2)$MI*edge.scalar, cex = text.size, layout = coords_q1_AT.ps2, vertex.shape = "none")
+#Saved image as "MI_dinucleotide_noncodon_q4.png"
+
+d_q1_AT.ps2.nc.display = d_q1_AT.ps2 %>%
+  mutate(d = Var2 - Var1 - 1) %>%
+  top_n(20, MI)
+
+d_q2_AT.ps2.nc.display = d_q2_AT.ps2 %>%
+  mutate(d = Var2 - Var1 - 1) %>%
+  top_n(20, MI)
+
+d_q3_AT.ps2.nc.display = d_q3_AT.ps2 %>%
+  mutate(d = Var2 - Var1 - 1) %>%
+  top_n(20, MI)
+
+d_q4_AT.ps2.nc.display = d_q4_AT.ps2 %>%
+  mutate(d = Var2 - Var1 - 1) %>%
+  top_n(20, MI)
+
+### OR
+
+d_q1_AT.ps2.nc.display = d_q1_AT.ps2 %>%
+  mutate(d = Var2 - Var1 - 1) %>%
+  group_by(d) %>%
+  summarise(avg_MI = round(mean(MI), 5)) %>%
+  top_n(4, avg_MI) %>%
+  arrange(desc(avg_MI))
+
+d_q2_AT.ps2.nc.display = d_q2_AT.ps2 %>%
+  mutate(d = Var2 - Var1 - 1) %>%
+  group_by(d) %>%
+  summarise(avg_MI = round(mean(MI), 5)) %>%
+  top_n(4, avg_MI) %>%
+  arrange(desc(avg_MI))
+
+d_q3_AT.ps2.nc.display = d_q3_AT.ps2 %>%
+  mutate(d = Var2 - Var1 - 1) %>%
+  group_by(d) %>%
+  summarise(avg_MI = round(mean(MI), 5)) %>%
+  top_n(4, avg_MI) %>%
+  arrange(desc(avg_MI))
+
+d_q4_AT.ps2.nc.display = d_q4_AT.ps2 %>%
+  mutate(d = Var2 - Var1 - 1) %>%
+  group_by(d) %>%
+  summarise(avg_MI = round(mean(MI), 5)) %>%
+  top_n(4, avg_MI) %>%
+  arrange(desc(avg_MI))
+
+grid.table(d_q1_AT.ps2.nc.display)
+grid.table(d_q2_AT.ps2.nc.display)
+grid.table(d_q3_AT.ps2.nc.display)
+grid.table(d_q4_AT.ps2.nc.display)
+```
+
+
+```{r}
+max(c(d_q1_AT.nc$MI,
+      d_q2_AT.nc$MI,
+      d_q3_AT.nc$MI,
+      d_q4_AT.nc$MI))
+## Nucleotide Heatmaps:
+map_q1_AT.nc <- d_q1_AT.nc %>%
+  ggplot(aes(x=Var1, y=Var2, fill=MI)) + 
+  geom_raster() + 
+  scale_fill_gradient2(limits = c(0, 0.002595412)) + 
+  ylab("Nucleotide Position 2") +
+  xlab("Nucleotide Position 1")
+
+map_q2_AT.nc <- d_q2_AT.nc %>%
+  ggplot(aes(x=Var1, y=Var2, fill=MI)) + 
+  geom_raster() + 
+  scale_fill_gradient2(limits = c(0, 0.002595412)) + 
+  ylab("Nucleotide Position 2") +
+  xlab("Nucleotide Position 1")
+
+map_q3_AT.nc <- d_q3_AT.nc %>%
+  ggplot(aes(x=Var1, y=Var2, fill=MI)) + 
+  geom_raster() + 
+  scale_fill_gradient2(limits = c(0, 0.002595412)) + 
+  ylab("Nucleotide Position 2") +
+  xlab("Nucleotide Position 1")
+
+map_q4_AT.nc <- d_q4_AT.nc %>%
+  ggplot(aes(x=Var1, y=Var2, fill=MI)) + 
+  geom_raster() + 
+  scale_fill_gradient2(limits = c(0, 0.002595412)) + 
+  ylab("Nucleotide Position 2") +
+  xlab("Nucleotide Position 1")
+
+map_q1_AT.nc
+map_q2_AT.nc
+map_q3_AT.nc
+map_q4_AT.nc
+```
+
+```{r}
+max(c(d_q1_AT.ps2$MI,
+      d_q2_AT.ps2$MI,
+      d_q3_AT.ps2$MI,
+      d_q4_AT.ps2$MI))
+## Dinucleotide Heatmaps:
+map_q1_AT.ps2 <- d_q1_AT.ps2 %>%
+  ggplot(aes(x=Var1, y=Var2, fill=MI)) + 
+  geom_raster() + 
+  scale_fill_gradient2(limits = c(0, 0.002056668)) + 
+  ylab("Dinucleotide Position 2") +
+  xlab("Dinucleotide Position 1")
+
+map_q2_AT.ps2 <- d_q2_AT.ps2 %>%
+  ggplot(aes(x=Var1, y=Var2, fill=MI)) + 
+  geom_raster() + 
+  scale_fill_gradient2(limits = c(0, 0.002056668)) + 
+  ylab("Dinucleotide Position 2") +
+  xlab("Dinucleotide Position 1")
+
+map_q3_AT.ps2 <- d_q3_AT.ps2 %>%
+  ggplot(aes(x=Var1, y=Var2, fill=MI)) + 
+  geom_raster() + 
+  scale_fill_gradient2(limits = c(0, 0.002056668)) + 
+  ylab("Dinucleotide Position 2") +
+  xlab("Dinucleotide Position 1")
+
+map_q4_AT.ps2 <- d_q4_AT.ps2 %>%
+  ggplot(aes(x=Var1, y=Var2, fill=MI)) + 
+  geom_raster() + 
+  scale_fill_gradient2(limits = c(0, 0.002056668)) + 
+  ylab("Dinucleotide Position 2") +
+  xlab("Dinucleotide Position 1")
+
+map_q1_AT.ps2
+map_q2_AT.ps2
+map_q3_AT.ps2
+map_q4_AT.ps2
+```
+
+
+```{r}
+# Find marginal distribution of A,T; C,G across entire train set:
+marg.AorT.nc = (sum(dat$A) + sum(dat$T))/(nrow(dat)*50)
+marg.notAorT.nc = (sum(dat$C) + sum(dat$G))/(nrow(dat)*50)
+
+marg_AT.nc = c(marg.AorT.nc, marg.notAorT.nc)
+
+# Simulation Study on mutual information significance
+set.seed(50)
+# N number of simulations
+N = 10000
+# M number of "sequences" in each simulation
+M = 18533
+sim.sequences_AT.nc <- vector("list", N)
+# Generate "sequences"
+sim.sequences_AT.nc <- lapply(sim.sequences_AT.nc, function(x) {
+  matrix(nrow = M, ncol = 2, data = sample(0:1, 2*M, replace = TRUE, prob = marg_AT.nc))
+})
+# Calculate mutual information for each sequence
+sim.MI_AT.nc <- lapply(sim.sequences_AT.nc, function(x) {
+  mutinformation(x[,1], x[,2])
+})
+sim.MI_AT.nc <- unlist(sim.MI_AT.nc)
+
+d_q1_AT.nc.sim <- d_q1_AT.nc %>%
+  mutate(pval = sapply(MI, function(x) {
+    sum(x < sim.MI_AT.nc)/N
+  }))
+
+d_q2_AT.nc.sim <- d_q2_AT.nc %>%
+  mutate(pval = sapply(MI, function(x) {
+    sum(x < sim.MI_AT.nc)/N
+  }))
+
+d_q3_AT.nc.sim <- d_q3_AT.nc %>%
+  mutate(pval = sapply(MI, function(x) {
+    sum(x < sim.MI_AT.nc)/N
+  }))
+
+d_q4_AT.nc.sim <- d_q4_AT.nc %>%
+  mutate(pval = sapply(MI, function(x) {
+    sum(x < sim.MI_AT.nc)/N
+  }))
+
+ggplot() +
+  geom_density(data=data.frame(Simulated = sim.MI_AT.nc), aes(x = Simulated, color = "Simulated")) + 
+  geom_density(data = d_q1_AT.nc.sim, aes(x = MI, color = "Q1")) + 
+  geom_density(data = d_q2_AT.nc.sim, aes(x = MI, color = "Q2")) +
+  geom_density(data = d_q3_AT.nc.sim, aes(x = MI, color = "Q3")) + 
+  geom_density(data = d_q4_AT.nc.sim, aes(x = MI, color = "Q4"))
+
+## Total number of edges in each quartile: 1128
+nrow(d_q1_AT.nc.sim)
+
+# Number of significant (alpha < .05) edges in each quartile:
+sum(d_q1_AT.nc.sim$pval < .05) # 641
+sum(d_q2_AT.nc.sim$pval < .05) # 580
+sum(d_q3_AT.nc.sim$pval < .05) # 596
+sum(d_q4_AT.nc.sim$pval < .05) # 684
+```
+
+```{r}
+# Find marginal distribution of dinucleotides across entire train set:
+marg.AA = sum(dat$AA)/(nrow(dat)*49)
+marg.AT = sum(dat$AT)/(nrow(dat)*49)
+marg.AC = sum(dat$AC)/(nrow(dat)*49)
+marg.AG = sum(dat$AG)/(nrow(dat)*49)
+marg.TA = sum(dat$TA)/(nrow(dat)*49)
+marg.TT = sum(dat$TT)/(nrow(dat)*49)
+marg.TC = sum(dat$TC)/(nrow(dat)*49)
+marg.TG = sum(dat$TG)/(nrow(dat)*49)
+marg.CA = sum(dat$CA)/(nrow(dat)*49)
+marg.CT = sum(dat$CT)/(nrow(dat)*49)
+marg.CC = sum(dat$CC)/(nrow(dat)*49)
+marg.CG = sum(dat$CG)/(nrow(dat)*49)
+marg.GA = sum(dat$GA)/(nrow(dat)*49)
+marg.GT = sum(dat$GT)/(nrow(dat)*49)
+marg.GC = sum(dat$GC)/(nrow(dat)*49)
+marg.GG = sum(dat$GG)/(nrow(dat)*49)
+
+marg.AorT.ps2 = (sum(dat$AA) + sum(dat$AT) + sum(dat$AC) + sum(dat$AG) +
+                   sum(dat$TA) + sum(dat$TT) + sum(dat$TC) + sum(dat$TG) +
+                   sum(dat$CA) + sum(dat$CT) + sum(dat$GA) + sum(dat$GT))/(nrow(dat)*49)
+marg.notAorT.ps2 = (sum(dat$CC) + sum(dat$CG) + sum(dat$GC) + sum(dat$GG))/(nrow(dat)*49)
+
+marg_AT.ps2 = c(marg.AorT.ps2, marg.notAorT.ps2)
+
+set.seed(50)
+# N number of simulations
+N = 10000
+# M number of "sequences" in each simulation
+M = 18533
+sim.sequences_AT.ps2 <- vector("list", N)
+# Generate "sequences"
+sim.sequences_AT.ps2 <- lapply(sim.sequences_AT.ps2, function(x) {
+  matrix(nrow = M, ncol = 2, data = sample(1:2, 2*M, replace = TRUE, prob = marg_AT.ps2))
+})
+# Calculate mutual information for each sequence
+sim.MI_AT.ps2 <- lapply(sim.sequences_AT.ps2, function(x) {
+  mutinformation(x[,1], x[,2])
+})
+sim.MI_AT.ps2 <- unlist(sim.MI_AT.ps2)
+
+d_q1_AT.ps2.sim <- d_q1_AT.ps2 %>%
+  mutate(pval = sapply(MI, function(x) {
+    sum(x < sim.MI_AT.ps2)/N
+  }))
+
+d_q2_AT.ps2.sim <- d_q2_AT.ps2 %>%
+  mutate(pval = sapply(MI, function(x) {
+    sum(x < sim.MI_AT.ps2)/N
+  }))
+
+d_q3_AT.ps2.sim <- d_q3_AT.ps2 %>%
+  mutate(pval = sapply(MI, function(x) {
+    sum(x < sim.MI_AT.ps2)/N
+  }))
+
+d_q4_AT.ps2.sim <- d_q4_AT.ps2 %>%
+  mutate(pval = sapply(MI, function(x) {
+    sum(x < sim.MI_AT.ps2)/N
+  }))
+
+ggplot() +
+  geom_density(data=data.frame(Simulated = sim.MI_AT.ps2), aes(x = Simulated)) +
+  geom_histogram(data = d_q1_AT.ps2.sim, aes(x = MI, fill = "Q1", alpha = .01)) + 
+  geom_histogram(data = d_q2_AT.ps2.sim, aes(x = MI, fill = "Q2", alpha = .01)) +
+  geom_histogram(data = d_q3_AT.ps2.sim, aes(x = MI, fill = "Q3", alpha = .01)) + 
+  geom_histogram(data = d_q4_AT.ps2.sim, aes(x = MI, fill = "Q4", alpha = .01))
+
+ggplot() +
+  geom_density(data=data.frame(Simulated = sim.MI_AT.ps2), aes(x = Simulated, color = "Simulated")) + 
+  geom_density(data = d_q1_AT.ps2.sim, aes(x = MI, color = "Q1")) + 
+  geom_density(data = d_q2_AT.ps2.sim, aes(x = MI, color = "Q2")) +
+  geom_density(data = d_q3_AT.ps2.sim, aes(x = MI, color = "Q3")) + 
+  geom_density(data = d_q4_AT.ps2.sim, aes(x = MI, color = "Q4"))
+
+## Total number of edges in each quartile: 1081
+nrow(d_q1_AT.ps2.sim)
+
+# Number of significant (alpha < .05) edges in each quartile:
+sum(d_q1_AT.ps2.sim$pval < .05) # 572
+sum(d_q2_AT.ps2.sim$pval < .05) # 603
+sum(d_q3_AT.ps2.sim$pval < .05) # 692
+sum(d_q4_AT.ps2.sim$pval < .05) # 597
+```
+
+
+```{r}
+# sim.sequences.nc <- matrix(nrow = M, ncol = 2)
+# sim.sequences.nc[,] <- sample(1:4, 2*M, replace = TRUE)
+# # Generate N random sequences of length 50
+# for(i in 1:N) {
+#   sim.sequences[i] <- paste(sample(nucleotides, 50, replace = TRUE), collapse = "")
+# }
+# 
+# # Construct features for random sequences (X1:50mono, X1:49di)
+# 
+# sim.sequence_1_df <- sim.sequences %>%
+#   sequence_df()
+# 
+# sim.sequence_2_df <- sim.sequences %>%
+#   map(~unlist(strsplit(.x, ""))) %>%
+#   map(~splitWithOverlap(.x, 2, 1)) %>%
+#   map_depth(2, paste0, collapse = "") %>%
+#   map(unlist) %>%
+#   unlist() %>%
+#   {matrix(., nrow = N, byrow = TRUE)} %>%
+#   data.frame(stringsAsFactors = FALSE)
+# 
+# sim.sequence_1_factor <- sim.sequence_1_df %>%
+#   map_df(~ factor(.x, levels = c("A", "C", "G", "T"))) %>%
+#   as.data.frame() %>%
+#   rename_all(~paste0(.x, "mono"))
+# 
+# sim.sequence_2_factor <- sim.sequence_2_df %>%
+#   map_df(~ factor(.x, levels = dinucleotides)) %>%
+#   as.data.frame() %>%
+#   rename_all(~paste0(.x, "di")) %>%
+#   select(-X50di)
+# 
+# sim.factor_seq <- sim.sequence_1_factor %>%
+#   bind_cols(sim.sequence_2_factor)
+# 
+# # Calculate Mutual Information:
+# sim.d = as.data.frame(matrix(nrow = 1225, ncol = 3))
+# colnames(sim.d) = c("Var1", "Var2", "MI")
+# z=1
+# for(i in 1:49) {
+#   for(j in (i+1):50) {
+#     sim.d[z, "Var1"] = i
+#     sim.d[z, "Var2"] = j
+#     sim.d[z, "MI"] = mutinformation(sim.factor_seq[,paste0("X", i, "mono")], sim.factor_seq[,paste0("X", j, "mono")])
+#     z=z+1
+#   }
+# }
+# 
+# sim.d.ps2 = as.data.frame(matrix(nrow = 1176, ncol = 3))
+# colnames(sim.d.ps2) = c("Var1", "Var2", "MI")
+# z=1
+# for(i in 1:48) {
+#   for(j in (i+1):49) {
+#     sim.d.ps2[z, "Var1"] = i
+#     sim.d.ps2[z, "Var2"] = j
+#     sim.d.ps2[z, "MI"] = mutinformation(sim.factor_seq[,paste0("X", i, "di")], sim.factor_seq[,paste0("X", j, "di")])
+#     z=z+1
+#   }
+# }
+```
+
+
+```{r}
+# Find mutual information across entire train dataset:
+# (as opposed to only within quartiles)
+
+d_full_AT = as.data.frame(matrix(nrow = 1225, ncol = 3))
+colnames(d_full_AT) = c("Var1", "Var2", "MI")
+z=1
+for(i in 1:49) {
+  for(j in (i+1):50) {
+    d_full_AT[z, "Var1"] = i
+    d_full_AT[z, "Var2"] = j
+    d_full_AT[z, "MI"] = mutinformation(dat_seq_AT[,paste0("X", i, "monoAT")], dat_seq_AT[,paste0("X", j, "monoAT")])
+    z=z+1
+  }
+}
+
+d_full_AT = d_full_AT %>%
+  arrange(desc(MI))
+
+d_full_AT.nc = d_full_AT %>%
+  filter(Var2 - Var1 >= 3)
+
+## Dinucleotides:
+
+d_full_AT.ps2 = as.data.frame(matrix(nrow = 1176, ncol = 3))
+colnames(d_full_AT.ps2) = c("Var1", "Var2", "MI")
+z=1
+for(i in 1:48) {
+  for(j in (i+1):49) {
+    d_full_AT.ps2[z, "Var1"] = i
+    d_full_AT.ps2[z, "Var2"] = j
+    d_full_AT.ps2[z, "MI"] = mutinformation(dat_seq_AT[,paste0("X", i, "diAT")], dat_seq_AT[,paste0("X", j, "diAT")])
+    z=z+1
+  }
+}
+
+d_full_AT.ps2 = d_full_AT.ps2 %>%
+  arrange(desc(MI))
+
+d_full_AT.ps2 = d_full_AT.ps2 %>%
+  filter(Var2 - Var1 >= 3)
+```
+
+
+
+```{r}
+# Simulation Study on mutual information significance - full dataset
+set.seed(50)
+# N number of simulations
+N = 10000
+# M number of "sequences" in each simulation
+M = 74131
+sim.sequences.nc.full_AT <- vector("list", N)
+# Generate "sequences"
+sim.sequences.nc.full_AT <- lapply(sim.sequences.nc.full_AT, function(x) {
+  matrix(nrow = M, ncol = 2, data = sample(1:2, 2*M, replace = TRUE, prob = marg_AT.nc))
+})
+# Calculate mutual information for each sequence
+sim.MI.nc.full_AT <- lapply(sim.sequences.nc.full_AT, function(x) {
+  mutinformation(x[,1], x[,2])
+})
+sim.MI.nc.full_AT <- unlist(sim.MI.nc.full_AT)
+
+d_full_AT.nc.sim <- d_full_AT.nc %>%
+  mutate(pval = sapply(MI, function(x) {
+    sum(x < sim.MI.nc.full_AT)/N
+  }))
+
+ggplot() +
+  geom_density(data=data.frame(Simulated = sim.MI.nc.full_AT), aes(x = Simulated)) + 
+  geom_histogram(data = d_full_AT.nc.sim, aes(x = MI, fill = "Q1", alpha = .01))
+
+## Total number of edges: 1128
+nrow(d_full_AT.nc.sim)
+
+# Number of significant (alpha < .05) edges in each quartile:
+sum(d_full_AT.nc.sim$pval < .05) # 550
+
+sum(d_full_AT.nc.sim$pval < .01) # 468
+
+plot(d_full_AT.nc.sim$MI)
+abline(h=.0025)
+
+sum(d_full_AT.nc.sim$MI > .0025) # 47
+
+d_full_AT.nc.sim.temp = d_full_AT.nc.sim %>%
+  filter(MI > .0025)
+```
+
+

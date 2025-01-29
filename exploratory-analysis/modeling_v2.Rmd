@@ -1,0 +1,2094 @@
+---
+title: "Modeling Version 2"
+author: "Brody Kendall"
+date: "2023-05-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+dat = readRDS("data/Created/processed_tiling_newC0_v2.rds")
+y = dat$C0_new
+dat_test = readRDS("data/Created/processed_tiling_test_newC0_v2.rds")
+y_test = dat_test$C0_new
+dat_random = readRDS("data/Created/processed_random_newC0_v2.rds")
+y_random = dat_random$C0_new
+dat_random_test = readRDS("data/Created/processed_random_test_newC0_v2.rds")
+y_random_test = dat_random_test$C0_new
+dat_random_all = rbind(dat_random, dat_random_test)
+y_random_all = c(y_random, y_random_test)
+dat_chrV = readRDS("data/Created/processed_chrV_newC0_v2.rds")
+y_chrV = dat_chrV$C0_new
+dat_chrV_test = readRDS("data/Created/processed_chrV_test_newC0_v2.rds")
+y_chrV_test = dat_chrV_test$C0_new
+dat_chrV_all = rbind(dat_chrV, dat_chrV_test)
+y_chrV_all = c(y_chrV, y_chrV_test)
+dat_yeast = readRDS("data/Created/processed_yeast_newC0_v2.rds")
+y_yeast = dat_yeast$C0_new
+dat_yeast_test = readRDS("data/Created/processed_yeast_test_newC0_v2.rds")
+y_yeast_test = dat_yeast_test$C0_new
+dat_yeast_all = rbind(dat_yeast, dat_yeast_test)
+y_yeast_all = c(y_yeast, y_yeast_test)
+```
+
+
+# Inputs: Position Specific Nucleotides Only
+
+```{r}
+library(Matrix)
+library(glmnet)
+ps1 <- paste0("X", 1:50, "mono")
+```
+
+## No interaction terms
+
+### Simple Linear Model
+
+```{r}
+dat_ps1 = dat %>% select(all_of(ps1), C0_new)
+ps1_lm = lm(C0_new~., data=dat_ps1)
+
+cor(ps1_lm$fitted.values, y)
+# 0.2018615
+
+dat_test_ps1 = dat_test %>% select(all_of(ps1), C0_new)
+ps1_lm_pred = predict(ps1_lm, dat_test_ps1)
+cor(ps1_lm_pred, y_test)
+# 0.2118867
+
+mean((ps1_lm_pred - y_test)^2)
+# 0.2439093
+```
+
+We get test prediction correlation of 0.2118867 and MSE of 0.2439093
+
+
+### LightGBM (tree-based) Model
+
+```{r}
+library(lightgbm)
+source("scripts/functions/lgbm-helper-functions.R")
+set.seed(50)
+dat_ps1.lgb_train_set = dat_ps1 %>%
+  select(-C0_new)
+dat_ps1.lgb_train_rules = lgb.convert_with_rules(data = dat_ps1.lgb_train_set)
+dat_ps1.lgb_train_data = lgb.Dataset(data = as.matrix(dat_ps1.lgb_train_rules$data),
+                                     label = dat_ps1$C0_new,
+                                     categorical_feature = handle_categorical(colnames(dat_ps1.lgb_train_rules$data)))
+dat_ps1.lgb_test_set = dat_test_ps1 %>%
+  select(-C0_new)
+dat_ps1.lgb_test_matrix = as.matrix(lgb.convert_with_rules(data = dat_ps1.lgb_test_set, rules = dat_ps1.lgb_train_rules$rules)$data)
+dat_ps1.lgb_test_data = lgb.Dataset(data = dat_ps1.lgb_test_matrix,
+                                    label = dat_test_ps1$C0_new,
+                                    categorical_feature = handle_categorical(colnames(dat_ps1.lgb_test_matrix)))
+dat_ps1.lgb_obj = lightgbm(data = dat_ps1.lgb_train_data,
+                           params = list(learning_rate = c(0.1),
+                                         objective = c("regression"),
+                                         min_data_in_leaf = 100,
+                                         max_depth = c(5),
+                                         num_leaves = c(1000),
+                                         lambda_l2 = c(1),
+                                         boosting = c("gbdt")),
+                           valids = list(valid = dat_ps1.lgb_test_data),
+                           nrounds = 4000,
+                           early_stopping_rounds = 50)
+
+dat_ps1.lgb_train_pred = predict(dat_ps1.lgb_obj, data = as.matrix(dat_ps1.lgb_train_rules$data))
+cor(dat_ps1.lgb_train_pred, y, method="pearson")
+# 0.9122315 (nrounds = 2426)
+
+dat_ps1.lgb_test_pred = predict(dat_ps1.lgb_obj, data = dat_ps1.lgb_test_matrix)
+
+cor(dat_ps1.lgb_test_pred, y_test, method="pearson")
+# 0.654402 (nrounds = 2426)
+
+mean((dat_ps1.lgb_test_pred - y_test)^2)
+# 0.1462973 (nrounds = 2426)
+```
+
+We get test prediction correlation of 0.654402 and MSE of 0.1462973
+
+```{r}
+dat_ps1.feature_importance = as.data.frame(lgb.importance(dat_ps1.lgb_obj)) %>%
+  mutate(Feature = fct_rev(fct_inorder(Feature))) %>%
+  dplyr::slice(1:50) %>%
+  ggplot(aes(x = Feature, y = Gain)) +
+  geom_col(fill = "dodgerblue") +
+  coord_flip() +
+  theme_bw()
+dat_ps1.feature_importance
+```
+
+
+
+# Inputs: Position Specific Dinucleotides
+
+```{r}
+library(Matrix)
+library(glmnet)
+ps2 <- paste0("X", 1:49, "di")
+```
+
+## No interaction terms
+
+### Simple Linear Model
+
+```{r}
+dat_ps2 = dat %>% select(all_of(ps2), C0_new)
+ps2_lm = lm(C0_new~., data=dat_ps2)
+
+cor(ps2_lm$fitted.values, y)
+# 0.4122529
+
+dat_test_ps2 = dat_test %>% select(all_of(ps2), C0_new)
+ps2_lm_pred = predict(ps2_lm, dat_test_ps2)
+cor(ps2_lm_pred, y_test)
+# 0.4090086
+
+mean((ps2_lm_pred - y_test)^2)
+# 0.2126627
+```
+
+We get test prediction correlation of 0.4090086 and MSE of 0.2126627
+
+### LightGBM (tree-based) Model
+
+```{r}
+library(lightgbm)
+source("scripts/functions/lgbm-helper-functions.R")
+set.seed(50)
+dat_ps2.lgb_train_set = dat_ps2 %>%
+  select(-C0_new)
+dat_ps2.lgb_train_rules = lgb.convert_with_rules(data = dat_ps2.lgb_train_set)
+dat_ps2.lgb_train_data = lgb.Dataset(data = as.matrix(dat_ps2.lgb_train_rules$data),
+                                     label = dat_ps2$C0_new,
+                                     categorical_feature = handle_categorical(colnames(dat_ps2.lgb_train_rules$data)))
+dat_ps2.lgb_test_set = dat_test_ps2 %>%
+  select(-C0_new)
+dat_ps2.lgb_test_matrix = as.matrix(lgb.convert_with_rules(data = dat_ps2.lgb_test_set, rules = dat_ps2.lgb_train_rules$rules)$data)
+dat_ps2.lgb_test_data = lgb.Dataset(data = dat_ps2.lgb_test_matrix,
+                                    label = dat_test_ps2$C0_new,
+                                    categorical_feature = handle_categorical(colnames(dat_ps2.lgb_test_matrix)))
+dat_ps2.lgb_obj = lightgbm(data = dat_ps2.lgb_train_data,
+                           params = list(learning_rate = c(0.1),
+                                         objective = c("regression"),
+                                         min_data_in_leaf = 100,
+                                         max_depth = c(5),
+                                         num_leaves = c(1000),
+                                         lambda_l2 = c(1),
+                                         boosting = c("gbdt")),
+                           valids = list(valid = dat_ps2.lgb_test_data),
+                           nrounds = 4000,
+                           early_stopping_rounds = 50)
+
+dat_ps2.lgb_train_pred = predict(dat_ps2.lgb_obj, data = as.matrix(dat_ps2.lgb_train_rules$data))
+cor(dat_ps2.lgb_train_pred, y, method="pearson")
+# 0.9947917 (nrounds = 2960)
+
+dat_ps2.lgb_test_pred = predict(dat_ps2.lgb_obj, data = dat_ps2.lgb_test_matrix)
+
+cor(dat_ps2.lgb_test_pred, y_test, method="pearson")
+# 0.7012322 (nrounds = 2960)
+
+mean((dat_ps2.lgb_test_pred - y_test)^2)
+# 0.1317264 (nrounds = 2960)
+```
+
+We get test prediction correlation of 0.7012322 and MSE of 0.1317264
+
+```{r}
+dat_ps2.feature_importance = as.data.frame(lgb.importance(dat_ps2.lgb_obj)) %>%
+  mutate(Feature = fct_rev(fct_inorder(Feature))) %>%
+  dplyr::slice(1:50) %>%
+  ggplot(aes(x = Feature, y = Gain)) +
+  geom_col(fill = "dodgerblue") +
+  coord_flip() +
+  theme_bw()
+dat_ps2.feature_importance
+```
+
+
+
+# Inputs: Position Specific Trinucleotides
+
+```{r}
+library(Matrix)
+library(glmnet)
+ps3 <- paste0("X", 1:48, "tri")
+```
+
+## No interaction terms
+
+### Simple Linear Model
+
+```{r}
+dat_ps3 = dat %>% select(all_of(ps3), C0_new)
+ps3_lm = lm(C0_new~., data=dat_ps3)
+
+cor(ps3_lm$fitted.values, y)
+# 0.4644227
+
+dat_test_ps3 = dat_test %>% select(all_of(ps3), C0_new)
+ps3_lm_pred = predict(ps3_lm, dat_test_ps3)
+cor(ps3_lm_pred, y_test)
+# 0.4175544
+
+mean((ps3_lm_pred - y_test)^2)
+# 0.2116631
+```
+
+We get test prediction correlation of 0.4175544 and MSE of 0.2116631
+
+### LightGBM (tree-based) Model
+
+```{r}
+library(lightgbm)
+source("scripts/functions/lgbm-helper-functions.R")
+set.seed(50)
+dat_ps3.lgb_train_set = dat_ps3 %>%
+  select(-C0_new)
+dat_ps3.lgb_train_rules = lgb.convert_with_rules(data = dat_ps3.lgb_train_set)
+dat_ps3.lgb_train_data = lgb.Dataset(data = as.matrix(dat_ps3.lgb_train_rules$data),
+                                     label = dat_ps3$C0_new,
+                                     categorical_feature = handle_categorical(colnames(dat_ps3.lgb_train_rules$data)))
+dat_ps3.lgb_test_set = dat_test_ps3 %>%
+  select(-C0_new)
+dat_ps3.lgb_test_matrix = as.matrix(lgb.convert_with_rules(data = dat_ps3.lgb_test_set, rules = dat_ps3.lgb_train_rules$rules)$data)
+dat_ps3.lgb_test_data = lgb.Dataset(data = dat_ps3.lgb_test_matrix,
+                                    label = dat_test_ps3$C0_new,
+                                    categorical_feature = handle_categorical(colnames(dat_ps3.lgb_test_matrix)))
+dat_ps3.lgb_obj = lightgbm(data = dat_ps3.lgb_train_data,
+                           params = list(learning_rate = c(0.1),
+                                         objective = c("regression"),
+                                         min_data_in_leaf = 100,
+                                         max_depth = c(5),
+                                         num_leaves = c(1000),
+                                         lambda_l2 = c(1),
+                                         boosting = c("gbdt")),
+                           valids = list(valid = dat_ps3.lgb_test_data),
+                           nrounds = 4000,
+                           early_stopping_rounds = 50)
+
+dat_ps3.lgb_train_pred = predict(dat_ps3.lgb_obj, data = as.matrix(dat_ps3.lgb_train_rules$data))
+cor(dat_ps3.lgb_train_pred, y, method="pearson")
+# 0.9999908 (nrounds = 3518)
+
+dat_ps3.lgb_test_pred = predict(dat_ps3.lgb_obj, data = dat_ps3.lgb_test_matrix)
+
+cor(dat_ps3.lgb_test_pred, y_test, method="pearson")
+# 0.6205287 (nrounds = 3518)
+
+mean((dat_ps3.lgb_test_pred - y_test)^2)
+# 0.1591681 (nrounds = 3518)
+```
+
+We get test prediction correlation of 0.6205287 and MSE of 0.1591681
+
+```{r}
+dat_ps3.feature_importance = as.data.frame(lgb.importance(dat_ps3.lgb_obj)) %>%
+  mutate(Feature = fct_rev(fct_inorder(Feature))) %>%
+  dplyr::slice(1:50) %>%
+  ggplot(aes(x = Feature, y = Gain)) +
+  geom_col(fill = "dodgerblue") +
+  coord_flip() +
+  theme_bw()
+dat_ps3.feature_importance
+```
+
+
+
+
+# Inputs: Counts of nucleotides
+
+```{r}
+nucleotides <- c("A", "C", "G", "T")
+```
+
+```{r}
+dat_mono = dat%>%
+  select(all_of(nucleotides), C0_new)
+
+mono = lm(C0_new~., data=dat_mono)
+cor(mono$fitted.values, dat_mono$C0_new)
+# 0.04939392
+
+dat_test_mono = dat_test%>%
+  select(all_of(nucleotides), C0_new)
+mono_pred = predict(mono, dat_test_mono)
+
+cor(mono_pred, dat_test_mono$C0_new)
+# 0.03215734
+
+mean((mono_pred - dat_test_mono$C0_new)^2)
+# 0.2551601
+```
+
+We get test prediction correlation of 0.03215734 and MSE of 0.2551601
+
+
+
+
+# Inputs: Counts of dinucleotides
+
+```{r}
+nucleotides <- c("A", "C", "G", "T")
+dinucleotides <- gtools::permutations(n = 4, r = 2, v = nucleotides,
+                                      repeats.allowed = TRUE) %>%
+  apply(1, paste, collapse = "")
+```
+
+## Simple Linear Model
+
+```{r}
+dat_di = dat%>%
+  select(all_of(dinucleotides), C0_new)
+
+di = lm(C0_new~., data=dat_di)
+cor(di$fitted.values, dat_di$C0_new)
+# 0.3321928
+
+dat_test_di = dat_test%>%
+  select(all_of(dinucleotides), C0_new)
+di_pred = predict(di, dat_test_di)
+
+cor(di_pred, dat_test_di$C0_new)
+# 0.3376226
+
+mean((di_pred - dat_test_di$C0_new)^2)
+# 0.2262433
+```
+
+We get test prediction correlation of 0.3376226 and MSE of 0.2262433
+
+## LightGBM (tree-based) Model
+
+```{r}
+library(lightgbm)
+source("scripts/functions/lgbm-helper-functions.R")
+set.seed(50)
+dat_di.lgb_train_set = dat_di %>%
+  select(-C0_new)
+dat_di.lgb_train_rules = lgb.convert_with_rules(data = dat_di.lgb_train_set)
+dat_di.lgb_train_data = lgb.Dataset(data = as.matrix(dat_di.lgb_train_rules$data),
+                                    label = dat_di$C0_new,
+                                    categorical_feature = handle_categorical(colnames(dat_di.lgb_train_rules$data)))
+dat_di.lgb_test_set = dat_test_di %>%
+  select(-C0_new)
+dat_di.lgb_test_matrix = as.matrix(lgb.convert_with_rules(data = dat_di.lgb_test_set, rules = dat_di.lgb_train_rules$rules)$data)
+dat_di.lgb_test_data = lgb.Dataset(data = dat_di.lgb_test_matrix,
+                                   label = dat_test_di$C0_new,
+                                   categorical_feature = handle_categorical(colnames(dat_di.lgb_test_matrix)))
+dat_di.lgb_obj = lightgbm(data = dat_di.lgb_train_data,
+                          params = list(learning_rate = c(0.1),
+                                        objective = c("regression"),
+                                        min_data_in_leaf = 100,
+                                        max_depth = c(5),
+                                        num_leaves = c(1000),
+                                        lambda_l2 = c(1),
+                                        boosting = c("gbdt")),
+                          valids = list(valid = dat_di.lgb_test_data),
+                          nrounds = 4000,
+                          early_stopping_rounds = 50)
+
+dat_di.lgb_train_pred = predict(dat_di.lgb_obj, data = as.matrix(dat_di.lgb_train_rules$data))
+cor(dat_di.lgb_train_pred, y, method="pearson")
+# 0.4635445 (nrounds = 465)
+
+dat_di.lgb_test_pred = predict(dat_di.lgb_obj, data = dat_di.lgb_test_matrix)
+
+cor(dat_di.lgb_test_pred, y_test, method="pearson")
+# 0.3684537 (nrounds = 465)
+
+mean((dat_di.lgb_test_pred - y_test)^2)
+# 0.2207676 (nrounds = 465)
+```
+
+We get test prediction correlation of 0.3684537 and MSE of 0.2207676
+
+```{r}
+dat_di.feature_importance = as.data.frame(lgb.importance(dat_di.lgb_obj)) %>%
+  mutate(Feature = fct_rev(fct_inorder(Feature))) %>%
+  dplyr::slice(1:50) %>%
+  ggplot(aes(x = Feature, y = Gain)) +
+  geom_col(fill = "dodgerblue") +
+  coord_flip() +
+  theme_bw()
+dat_di.feature_importance
+```
+
+
+
+
+
+# Inputs: Counts of trinucleotides
+
+```{r}
+nucleotides <- c("A", "C", "G", "T")
+dinucleotides <- gtools::permutations(n = 4, r = 2, v = nucleotides,
+                                      repeats.allowed = TRUE) %>%
+  apply(1, paste, collapse = "")
+trinucleotides <- gtools::permutations(n = 4, r = 3, v = nucleotides,
+                                       repeats.allowed = TRUE) %>%
+  apply(1, paste, collapse = "")
+```
+
+## Simple Linear Model
+
+```{r}
+dat_tri = dat%>%
+  select(all_of(trinucleotides), C0_new)
+
+tri = lm(C0_new~., data=dat_tri)
+cor(tri$fitted.values, dat_tri$C0_new)
+# 0.3600068
+
+dat_test_tri = dat_test%>%
+  select(all_of(trinucleotides), C0_new)
+tri_pred = predict(tri, dat_test_tri)
+
+cor(tri_pred, dat_test_tri$C0_new)
+# 0.361639
+
+mean((tri_pred - dat_test_tri$C0_new)^2)
+# 0.221972
+```
+
+We get test prediction correlation of 0.361639 and MSE of 0.221972
+
+## LightGBM (tree-based) Model
+
+```{r}
+library(lightgbm)
+source("scripts/functions/lgbm-helper-functions.R")
+set.seed(50)
+dat_tri.lgb_train_set = dat_tri %>%
+  select(-C0_new)
+dat_tri.lgb_train_rules = lgb.convert_with_rules(data = dat_tri.lgb_train_set)
+dat_tri.lgb_train_data = lgb.Dataset(data = as.matrix(dat_tri.lgb_train_rules$data),
+                                     label = dat_tri$C0_new,
+                                     categorical_feature = handle_categorical(colnames(dat_tri.lgb_train_rules$data)))
+dat_tri.lgb_test_set = dat_test_tri %>%
+  select(-C0_new)
+dat_tri.lgb_test_matrix = as.matrix(lgb.convert_with_rules(data = dat_tri.lgb_test_set, rules = dat_tri.lgb_train_rules$rules)$data)
+dat_tri.lgb_test_data = lgb.Dataset(data = dat_tri.lgb_test_matrix,
+                                    label = dat_test_tri$C0_new,
+                                    categorical_feature = handle_categorical(colnames(dat_tri.lgb_test_matrix)))
+dat_tri.lgb_obj = lightgbm(data = dat_tri.lgb_train_data,
+                           params = list(learning_rate = c(0.1),
+                                         objective = c("regression"),
+                                         min_data_in_leaf = 100,
+                                         max_depth = c(5),
+                                         num_leaves = c(1000),
+                                         lambda_l2 = c(1),
+                                         boosting = c("gbdt")),
+                           valids = list(valid = dat_tri.lgb_test_data),
+                           nrounds = 4000,
+                           early_stopping_rounds = 50)
+
+dat_tri.lgb_train_pred = predict(dat_tri.lgb_obj, data = as.matrix(dat_tri.lgb_train_rules$data))
+cor(dat_tri.lgb_train_pred, y, method="pearson")
+# 0.7693533 (nrounds = 2827)
+
+dat_tri.lgb_test_pred = predict(dat_tri.lgb_obj, data = dat_tri.lgb_test_matrix)
+
+cor(dat_tri.lgb_test_pred, y_test, method="pearson")
+# 0.5098124 (nrounds = 2827)
+
+mean((dat_tri.lgb_test_pred - y_test)^2)
+# 0.1890076 (nrounds = 2827)
+```
+
+We get test prediction correlation of 0.5098124 and MSE of 0.1890076
+
+```{r}
+dat_tri.feature_importance = as.data.frame(lgb.importance(dat_tri.lgb_obj)) %>%
+  mutate(Feature = fct_rev(fct_inorder(Feature))) %>%
+  dplyr::slice(1:50) %>%
+  ggplot(aes(x = Feature, y = Gain)) +
+  geom_col(fill = "dodgerblue") +
+  coord_flip() +
+  theme_bw()
+dat_tri.feature_importance
+```
+
+
+
+
+# Inputs: Fourier Features Based on A/T Nucleotides Calculated using fft
+
+```{r}
+library(Matrix)
+library(glmnet)
+Xone_AorT_fourier_cos = readRDS("data/Created/tiling_Xone_AorT_fourier_cos.rds")
+Xone_AorT_fourier_sin = readRDS("data/Created/tiling_Xone_AorT_fourier_sin.rds")
+Xone_AorT_fourier_cos_test = readRDS("data/Created/tiling_Xone_AorT_fourier_cos_test.rds")
+Xone_AorT_fourier_sin_test = readRDS("data/Created/tiling_Xone_AorT_fourier_sin_test.rds")
+```
+
+
+## Raw Fourier features
+
+```{r}
+X_fourier.3 = bind_cols(Xone_AorT_fourier_cos, Xone_AorT_fourier_sin)
+x_fourier.3 = sparse.model.matrix(~ ., data=X_fourier.3)
+
+set.seed(50)
+la.model_fourier.3 = cv.glmnet(x_fourier.3, y, alpha=1, family="gaussian")
+ri.model_fourier.3 = cv.glmnet(x_fourier.3, y, alpha=0, family="gaussian")
+
+la.fourier_best_lambda.3 = la.model_fourier.3$lambda.min
+la.fourier_best_lambda.3
+ri.fourier_best_lambda.3 = ri.model_fourier.3$lambda.min
+ri.fourier_best_lambda.3
+
+la.model_fourier.train_pred.3 = predict(la.model_fourier.3, 
+                                        newx = x_fourier.3, 
+                                        s=la.fourier_best_lambda.3)
+ri.model_fourier.train_pred.3 = predict(ri.model_fourier.3, 
+                                        newx = x_fourier.3, 
+                                        s=ri.fourier_best_lambda.3)
+
+cor(la.model_fourier.train_pred.3, y, method="pearson")
+# 0.1877762
+mean((la.model_fourier.train_pred.3 - y)^2)
+# 0.2472667
+
+cor(ri.model_fourier.train_pred.3, y, method="pearson")
+# 0.1882019
+mean((ri.model_fourier.train_pred.3 - y)^2)
+# 0.247217
+
+X_fourier_test.3 = bind_cols(Xone_AorT_fourier_cos_test, Xone_AorT_fourier_sin_test)
+x_fourier_test.3 = sparse.model.matrix(~., data=X_fourier_test.3)
+
+la.model_fourier.pred.3 = predict(la.model_fourier.3, 
+                                  newx = x_fourier_test.3, 
+                                  s=la.fourier_best_lambda.3)
+ri.model_fourier.pred.3 = predict(ri.model_fourier.3, 
+                                  newx = x_fourier_test.3, 
+                                  s=ri.fourier_best_lambda.3)
+
+cor(la.model_fourier.pred.3, y_test, method="pearson")
+# 0.2006671
+mean((la.model_fourier.pred.3 - y_test)^2)
+# 0.2451518
+cor(ri.model_fourier.pred.3, y_test, method="pearson")
+# 0.2016819
+mean((ri.model_fourier.pred.3 - y_test)^2)
+# 0.245024
+```
+
+We get test prediction correlation of 0.2006671 and MSE of 0.2451518 with lasso
+We get test prediction correlation of 0.2016819 and MSE of 0.245024 with ridge
+
+## Absolute value of Fourier features
+
+```{r}
+X_fourier_abs.2 = bind_cols(abs(Xone_AorT_fourier_cos), abs(Xone_AorT_fourier_sin))
+x_fourier_abs.2 = sparse.model.matrix(~ ., data=X_fourier_abs.2)
+
+set.seed(50)
+la.model_fourier_abs.2 = cv.glmnet(x_fourier_abs.2, y, alpha=1, family="gaussian")
+ri.model_fourier_abs.2 = cv.glmnet(x_fourier_abs.2, y, alpha=0, family="gaussian")
+
+la.fourier_best_lambda_abs.2 = la.model_fourier_abs.2$lambda.min
+la.fourier_best_lambda_abs.2
+ri.fourier_best_lambda_abs.2 = ri.model_fourier_abs.2$lambda.min
+ri.fourier_best_lambda_abs.2
+
+la.model_fourier.train_pred_abs.2 = predict(la.model_fourier_abs.2, 
+                                            newx = x_fourier_abs.2, 
+                                            s=la.fourier_best_lambda_abs.2)
+ri.model_fourier.train_pred_abs.2 = predict(ri.model_fourier_abs.2, 
+                                            newx = x_fourier_abs.2, 
+                                            s=ri.fourier_best_lambda_abs.2)
+
+cor(la.model_fourier.train_pred_abs.2, y, method="pearson")
+# 0.400002
+mean((la.model_fourier.train_pred_abs.2 - y)^2)
+# 0.2152878
+
+cor(ri.model_fourier.train_pred_abs.2, y, method="pearson")
+# 0.4001394
+mean((ri.model_fourier.train_pred_abs.2 - y)^2)
+# 0.2152976
+
+X_fourier_test_abs.2 = bind_cols(abs(Xone_AorT_fourier_cos_test), abs(Xone_AorT_fourier_sin_test))
+x_fourier_test_abs.2 = sparse.model.matrix(~., data=X_fourier_test_abs.2)
+
+la.model_fourier.pred_abs.2 = predict(la.model_fourier_abs.2, 
+                                      newx = x_fourier_test_abs.2, 
+                                      s=la.fourier_best_lambda_abs.2)
+ri.model_fourier.pred_abs.2 = predict(ri.model_fourier_abs.2, 
+                                      newx = x_fourier_test_abs.2, 
+                                      s=ri.fourier_best_lambda_abs.2)
+
+cor(la.model_fourier.pred_abs.2, y_test, method="pearson")
+# 0.3958477
+mean((la.model_fourier.pred_abs.2 - y_test)^2)
+# 0.2153403
+cor(ri.model_fourier.pred_abs.2, y_test, method="pearson")
+# 0.39587
+mean((ri.model_fourier.pred_abs.2 - y_test)^2)
+# 0.2153572
+```
+
+We get test prediction correlation of 0.3958477 and MSE of 0.2153403 with lasso
+We get test prediction correlation of 0.39587 and MSE of 0.2153572 with ridge
+
+## Squared value of Fourier features
+
+```{r}
+X_fourier_sq.2 = bind_cols((Xone_AorT_fourier_cos)^2, (Xone_AorT_fourier_sin)^2)
+x_fourier_sq.2 = sparse.model.matrix(~ ., data=X_fourier_sq.2)
+
+set.seed(50)
+la.model_fourier_sq.2 = cv.glmnet(x_fourier_sq.2, y, alpha=1, family="gaussian")
+ri.model_fourier_sq.2 = cv.glmnet(x_fourier_sq.2, y, alpha=0, family="gaussian")
+
+la.fourier_best_lambda_sq.2 = la.model_fourier_sq.2$lambda.min
+la.fourier_best_lambda_sq.2
+ri.fourier_best_lambda_sq.2 = ri.model_fourier_sq.2$lambda.min
+ri.fourier_best_lambda_sq.2
+
+la.model_fourier.train_pred_sq.2 = predict(la.model_fourier_sq.2, 
+                                           newx = x_fourier_sq.2, 
+                                           s=la.fourier_best_lambda_sq.2)
+ri.model_fourier.train_pred_sq.2 = predict(ri.model_fourier_sq.2, 
+                                           newx = x_fourier_sq.2, 
+                                           s=ri.fourier_best_lambda_sq.2)
+
+cor(la.model_fourier.train_pred_sq.2, y, method="pearson")
+# 0.414302
+mean((la.model_fourier.train_pred_sq.2 - y)^2)
+# 0.2123032
+
+cor(ri.model_fourier.train_pred_sq.2, y, method="pearson")
+# 0.4143977
+mean((ri.model_fourier.train_pred_sq.2 - y)^2)
+# 0.2123258
+
+X_fourier_test_sq.2 = bind_cols((Xone_AorT_fourier_cos_test)^2, (Xone_AorT_fourier_sin_test)^2)
+x_fourier_test_sq.2 = sparse.model.matrix(~., data=X_fourier_test_sq.2)
+
+la.model_fourier.pred_sq.2 = predict(la.model_fourier_sq.2, 
+                                     newx = x_fourier_test_sq.2, 
+                                     s=la.fourier_best_lambda_sq.2)
+ri.model_fourier.pred_sq.2 = predict(ri.model_fourier_sq.2, 
+                                     newx = x_fourier_test_sq.2, 
+                                     s=ri.fourier_best_lambda_sq.2)
+
+cor(la.model_fourier.pred_sq.2, y_test, method="pearson")
+# 0.4115064
+mean((la.model_fourier.pred_sq.2 - y_test)^2)
+# 0.2121171
+cor(ri.model_fourier.pred_sq.2, y_test, method="pearson")
+# 0.411463
+mean((ri.model_fourier.pred_sq.2 - y_test)^2)
+# 0.2121755
+```
+
+We get test prediction correlation of 0.4115064 and MSE of 0.2121171 with lasso
+We get test prediction correlation of 0.411463 and MSE of 0.2121755 with ridge
+
+
+
+# Inputs: Fourier Features Based on AA/TT/AT/TA Dinucleotides Calculated using fft
+
+```{r}
+library(Matrix)
+library(glmnet)
+Xtwo_AorT_fourier_cos = readRDS("data/Created/tiling_Xtwo_AorT_fourier_cos.rds")
+Xtwo_AorT_fourier_sin = readRDS("data/Created/tiling_Xtwo_AorT_fourier_sin.rds")
+Xtwo_AorT_fourier_cos_test = readRDS("data/Created/tiling_Xtwo_AorT_fourier_cos_test.rds")
+Xtwo_AorT_fourier_sin_test = readRDS("data/Created/tiling_Xtwo_AorT_fourier_sin_test.rds")
+```
+
+## Squared value of Fourier features
+
+```{r}
+X_fourier2_sq.2 = bind_cols((Xtwo_AorT_fourier_cos)^2, (Xtwo_AorT_fourier_sin)^2)
+x_fourier2_sq.2 = sparse.model.matrix(~ ., data=X_fourier2_sq.2)
+
+set.seed(50)
+la.model_fourier2_sq.2 = cv.glmnet(x_fourier2_sq.2, y, alpha=1, family="gaussian")
+ri.model_fourier2_sq.2 = cv.glmnet(x_fourier2_sq.2, y, alpha=0, family="gaussian")
+
+la.fourier2_best_lambda_sq.2 = la.model_fourier2_sq.2$lambda.min
+la.fourier2_best_lambda_sq.2
+ri.fourier2_best_lambda_sq.2 = ri.model_fourier2_sq.2$lambda.min
+ri.fourier2_best_lambda_sq.2
+
+la.model_fourier2.train_pred_sq.2 = predict(la.model_fourier2_sq.2, 
+                                            newx = x_fourier2_sq.2, 
+                                            s=la.fourier2_best_lambda_sq.2)
+ri.model_fourier2.train_pred_sq.2 = predict(ri.model_fourier2_sq.2, 
+                                            newx = x_fourier2_sq.2, 
+                                            s=ri.fourier2_best_lambda_sq.2)
+
+cor(la.model_fourier2.train_pred_sq.2, y, method="pearson")
+# 0.3761258
+mean((la.model_fourier2.train_pred_sq.2 - y)^2)
+# 0.2200346
+
+cor(ri.model_fourier2.train_pred_sq.2, y, method="pearson")
+# 0.3760975
+mean((ri.model_fourier2.train_pred_sq.2 - y)^2)
+# 0.220072
+
+X_fourier2_test_sq.2 = bind_cols((Xtwo_AorT_fourier_cos_test)^2, (Xtwo_AorT_fourier_sin_test)^2)
+x_fourier2_test_sq.2 = sparse.model.matrix(~., data=X_fourier2_test_sq.2)
+
+la.model_fourier2.pred_sq.2 = predict(la.model_fourier2_sq.2, 
+                                      newx = x_fourier2_test_sq.2, 
+                                      s=la.fourier2_best_lambda_sq.2)
+ri.model_fourier2.pred_sq.2 = predict(ri.model_fourier2_sq.2, 
+                                      newx = x_fourier2_test_sq.2, 
+                                      s=ri.fourier2_best_lambda_sq.2)
+
+cor(la.model_fourier2.pred_sq.2, y_test, method="pearson")
+# 0.3772037
+mean((la.model_fourier2.pred_sq.2 - y_test)^2)
+# 0.2190346
+cor(ri.model_fourier2.pred_sq.2, y_test, method="pearson")
+# 0.3774306
+mean((ri.model_fourier2.pred_sq.2 - y_test)^2)
+# 0.2190526
+```
+
+We get test prediction correlation of 0.3772037 and MSE of 0.2190346 with lasso
+We get test prediction correlation of 0.3774306 and MSE of 0.2190526 with ridge
+
+
+
+
+
+# Inputs: Fourier Features Based on all Dinucleotides with h=6 (period 9.8) Calculated using fft
+
+```{r}
+fourier_di_cos = readRDS("data/Created/tiling_fourier_di_cos.rds")
+fourier_di_sin = readRDS("data/Created/tiling_fourier_di_sin.rds")
+fourier_di_cos_test = readRDS("data/Created/tiling_fourier_di_cos_test.rds")
+fourier_di_sin_test = readRDS("data/Created/tiling_fourier_di_sin_test.rds")
+
+fourier_di_cos_6 = as.data.frame(fourier_di_cos) %>% select(ends_with("_6"))
+fourier_di_sin_6 = as.data.frame(fourier_di_sin) %>% select(ends_with("_6"))
+fourier_di_cos_6_test = as.data.frame(fourier_di_cos_test) %>% select(ends_with("_6"))
+fourier_di_sin_6_test = as.data.frame(fourier_di_sin_test) %>% select(ends_with("_6"))
+```
+
+## Squared value of Fourier features
+
+### Simple Linear Model
+
+```{r}
+dat_fourier_6 = cbind((fourier_di_cos_6)^2, (fourier_di_sin_6)^2, 
+                      dat %>% select(C0_new))
+
+fourier_6_lm = lm(C0_new~., data=dat_fourier_6)
+cor(fourier_6_lm$fitted.values, y)
+# 0.2693613
+
+dat_test_fourier_6 = cbind((fourier_di_cos_6_test)^2, (fourier_di_sin_6_test)^2, 
+                           dat_test %>% select(C0_new))
+
+fourier_6_pred = predict(fourier_6_lm, dat_test_fourier_6)
+
+cor(fourier_6_pred, y_test)
+# 0.2720019
+
+mean((fourier_6_pred - y_test)^2)
+# 0.2364549
+```
+
+We get test prediction correlation of 0.2720019 and MSE of 0.2364549
+
+### LightGBM (tree-based) Model
+
+```{r}
+library(lightgbm)
+source("scripts/functions/lgbm-helper-functions.R")
+set.seed(50)
+dat_fourier_6.lgb_train_set = dat_fourier_6 %>%
+  select(-C0_new)
+dat_fourier_6.lgb_train_rules = lgb.convert_with_rules(data = dat_fourier_6.lgb_train_set)
+dat_fourier_6.lgb_train_data = lgb.Dataset(data = as.matrix(dat_fourier_6.lgb_train_rules$data),
+                                           label = dat_fourier_6$C0_new,
+                                           categorical_feature = handle_categorical(colnames(dat_fourier_6.lgb_train_rules$data)))
+dat_fourier_6.lgb_test_set = dat_test_fourier_6 %>%
+  select(-C0_new)
+dat_fourier_6.lgb_test_matrix = as.matrix(lgb.convert_with_rules(data = dat_fourier_6.lgb_test_set, rules = dat_fourier_6.lgb_train_rules$rules)$data)
+dat_fourier_6.lgb_test_data = lgb.Dataset(data = dat_fourier_6.lgb_test_matrix,
+                                          label = dat_test_fourier_6$C0_new,
+                                          categorical_feature = handle_categorical(colnames(dat_fourier_6.lgb_test_matrix)))
+dat_fourier_6.lgb_obj = lightgbm(data = dat_fourier_6.lgb_train_data,
+                                 params = list(learning_rate = c(0.1),
+                                               objective = c("regression"),
+                                               min_data_in_leaf = 100,
+                                               max_depth = c(5),
+                                               num_leaves = c(1000),
+                                               lambda_l2 = c(1),
+                                               boosting = c("gbdt")),
+                                 valids = list(valid = dat_fourier_6.lgb_test_data),
+                                 nrounds = 2000,
+                                 early_stopping_rounds = 50)
+
+dat_fourier_6.lgb_train_pred = predict(dat_fourier_6.lgb_obj, data = as.matrix(dat_fourier_6.lgb_train_rules$data))
+cor(dat_fourier_6.lgb_train_pred, y, method="pearson")
+# 0.4894119 (nrounds = 239)
+
+
+dat_fourier_6.lgb_test_pred = predict(dat_fourier_6.lgb_obj, data = dat_fourier_6.lgb_test_matrix)
+
+cor(dat_fourier_6.lgb_test_pred, y_test, method="pearson")
+# 0.3426833 (nrounds = 239)
+
+mean((dat_fourier_6.lgb_test_pred - y_test)^2)
+# 0.2253657 (nrounds = 239)
+```
+
+We get test prediction correlation of 0.3426833 and MSE of 0.2253657
+
+```{r}
+dat_fourier_6.feature_importance = as.data.frame(lgb.importance(dat_fourier_6.lgb_obj)) %>%
+  mutate(Feature = fct_rev(fct_inorder(Feature))) %>%
+  dplyr::slice(1:50) %>%
+  ggplot(aes(x = Feature, y = Gain)) +
+  geom_col(fill = "dodgerblue") +
+  coord_flip() +
+  theme_bw()
+dat_fourier_6.feature_importance
+```
+
+
+
+
+
+# Inputs: Modulus of Difference of Fourier Features Based on all Dinucleotides with h=6 (period 9.8) Calculated using fft
+
+```{r}
+fourier_6_mod = readRDS("data/Created/tiling_fourier_6_mod.rds")
+fourier_6_mod_test = readRDS("data/Created/tiling_fourier_6_mod_test.rds")
+```
+
+## Squared value of Fourier features
+
+### Simple Linear Model
+
+```{r}
+dat_fourier_6_mod2 = cbind((fourier_6_mod)^2, dat %>% select(C0_new))
+
+fourier_6_mod2_lm = lm(C0_new~., data=dat_fourier_6_mod2)
+cor(fourier_6_mod2_lm$fitted.values, y)
+# 0.460751
+
+dat_test_fourier_6_mod2 = cbind((fourier_6_mod_test)^2, dat_test %>% select(C0_new))
+
+fourier_6_mod2_pred = predict(fourier_6_mod2_lm, dat_test_fourier_6_mod2)
+
+cor(fourier_6_mod2_pred, y_test)
+# 0.4624193
+
+mean((fourier_6_mod2_pred - y_test)^2)
+# 0.2007456
+```
+
+We get test prediction correlation of 0.4624193 and MSE of 0.2007456
+
+### LightGBM (tree-based) Model
+
+```{r}
+library(lightgbm)
+source("scripts/functions/lgbm-helper-functions.R")
+set.seed(50)
+dat_fourier_6_mod2.lgb_train_set = dat_fourier_6_mod2 %>%
+  select(-C0_new)
+dat_fourier_6_mod2.lgb_train_rules = lgb.convert_with_rules(data = dat_fourier_6_mod2.lgb_train_set)
+dat_fourier_6_mod2.lgb_train_data = lgb.Dataset(data = as.matrix(dat_fourier_6_mod2.lgb_train_rules$data),
+                                                label = dat_fourier_6_mod2$C0_new,
+                                                categorical_feature = handle_categorical(colnames(dat_fourier_6_mod2.lgb_train_rules$data)))
+dat_fourier_6_mod2.lgb_test_set = dat_test_fourier_6_mod2 %>%
+  select(-C0_new)
+dat_fourier_6_mod2.lgb_test_matrix = as.matrix(lgb.convert_with_rules(data = dat_fourier_6_mod2.lgb_test_set, rules = dat_fourier_6_mod2.lgb_train_rules$rules)$data)
+dat_fourier_6_mod2.lgb_test_data = lgb.Dataset(data = dat_fourier_6_mod2.lgb_test_matrix,
+                                               label = dat_test_fourier_6_mod2$C0_new,
+                                               categorical_feature = handle_categorical(colnames(dat_fourier_6_mod2.lgb_test_matrix)))
+dat_fourier_6_mod2.lgb_obj = lightgbm(data = dat_fourier_6_mod2.lgb_train_data,
+                                      params = list(learning_rate = c(0.1),
+                                                    objective = c("regression"),
+                                                    min_data_in_leaf = 100,
+                                                    max_depth = c(5),
+                                                    num_leaves = c(1000),
+                                                    lambda_l2 = c(1),
+                                                    boosting = c("gbdt")),
+                                      valids = list(valid = dat_fourier_6_mod2.lgb_test_data),
+                                      nrounds = 8000,
+                                      early_stopping_rounds = 50)
+
+dat_fourier_6_mod2.lgb_train_pred = predict(dat_fourier_6_mod2.lgb_obj, data = as.matrix(dat_fourier_6_mod2.lgb_train_rules$data))
+cor(dat_fourier_6_mod2.lgb_train_pred, y, method="pearson")
+# 0.7307838 (nrounds = 668)
+
+dat_fourier_6_mod2.lgb_test_pred = predict(dat_fourier_6_mod2.lgb_obj, data = dat_fourier_6_mod2.lgb_test_matrix)
+
+cor(dat_fourier_6_mod2.lgb_test_pred, y_test, method="pearson")
+# 0.4870905 (nrounds = 668)
+
+mean((dat_fourier_6_mod2.lgb_test_pred - y_test)^2)
+# 0.1947692 (nrounds = 668)
+```
+
+We get test prediction correlation of 0.4870905 and MSE of 0.1947692
+
+```{r}
+dat_fourier_6_mod2.feature_importance = as.data.frame(lgb.importance(dat_fourier_6_mod2.lgb_obj)) %>%
+  mutate(Feature = fct_rev(fct_inorder(Feature))) %>%
+  dplyr::slice(1:50) %>%
+  ggplot(aes(x = Feature, y = Gain)) +
+  geom_col(fill = "dodgerblue") +
+  coord_flip() +
+  theme_bw()
+dat_fourier_6_mod2.feature_importance
+```
+
+
+
+
+
+# Inputs: Position Specific Dinucleotides + Counts of trinucleotides + Fourier Features Based on all Dinucleotides with h=6 (period 9.8) + Modulus of Difference of Fourier Features Based on all Dinucleotides with h=6 (period 9.8) Calculated using fft
+
+```{r}
+ps2 <- paste0("X", 1:49, "di")
+nucleotides <- c("A", "C", "G", "T")
+dinucleotides <- gtools::permutations(n = 4, r = 2, v = nucleotides,
+                                      repeats.allowed = TRUE) %>%
+  apply(1, paste, collapse = "")
+trinucleotides <- gtools::permutations(n = 4, r = 3, v = nucleotides,
+                                       repeats.allowed = TRUE) %>%
+  apply(1, paste, collapse = "")
+
+fourier_di_cos = readRDS("data/Created/tiling_fourier_di_cos.rds")
+fourier_di_sin = readRDS("data/Created/tiling_fourier_di_sin.rds")
+fourier_di_cos_test = readRDS("data/Created/tiling_fourier_di_cos_test.rds")
+fourier_di_sin_test = readRDS("data/Created/tiling_fourier_di_sin_test.rds")
+
+fourier_di_cos_6 = as.data.frame(fourier_di_cos) %>% select(ends_with("_6"))
+fourier_di_sin_6 = as.data.frame(fourier_di_sin) %>% select(ends_with("_6"))
+fourier_di_cos_6_test = as.data.frame(fourier_di_cos_test) %>% select(ends_with("_6"))
+fourier_di_sin_6_test = as.data.frame(fourier_di_sin_test) %>% select(ends_with("_6"))
+
+fourier_6_mod = readRDS("data/Created/tiling_fourier_6_mod.rds")
+fourier_6_mod_test = readRDS("data/Created/tiling_fourier_6_mod_test.rds")
+```
+
+## Squared value of Fourier features calculated using fft
+
+### Simple Linear Model
+
+```{r}
+dat_tri22 = cbind(dat %>% select(all_of(ps2), all_of(trinucleotides), C0_new), 
+                  (fourier_di_cos_6)^2, (fourier_di_sin_6)^2, 
+                  (fourier_6_mod)^2)
+
+tri22_lm = lm(C0_new~., data=dat_tri22)
+cor(tri22_lm$fitted.values, y)
+# 0.6207569
+
+dat_test_tri22 = cbind(dat_test %>% select(all_of(ps2), all_of(trinucleotides), C0_new),
+                       (fourier_di_cos_6_test)^2, (fourier_di_sin_6_test)^2, 
+                       (fourier_6_mod_test)^2)
+
+tri22_pred = predict(tri22_lm, dat_test_tri22)
+
+cor(tri22_pred, y_test)
+# 0.6221648
+
+mean((tri22_pred - y_test)^2)
+# 0.1565109
+```
+
+We get test prediction correlation of 0.6221648 and MSE of 0.1565109
+
+### LightGBM (tree-based) Model
+
+```{r}
+library(lightgbm)
+source("scripts/functions/lgbm-helper-functions.R")
+set.seed(50)
+dat_tri22.lgb_train_set = dat_tri22 %>%
+  select(-C0_new)
+dat_tri22.lgb_train_rules = lgb.convert_with_rules(data = dat_tri22.lgb_train_set)
+dat_tri22.lgb_train_data = lgb.Dataset(data = as.matrix(dat_tri22.lgb_train_rules$data),
+                                       label = dat_tri22$C0_new,
+                                       categorical_feature = handle_categorical(colnames(dat_tri22.lgb_train_rules$data)))
+dat_tri22.lgb_test_set = dat_test_tri22 %>%
+  select(-C0_new)
+dat_tri22.lgb_test_matrix = as.matrix(lgb.convert_with_rules(data = dat_tri22.lgb_test_set, rules = dat_tri22.lgb_train_rules$rules)$data)
+dat_tri22.lgb_test_data = lgb.Dataset(data = dat_tri22.lgb_test_matrix,
+                                      label = dat_test_tri22$C0_new,
+                                      categorical_feature = handle_categorical(colnames(dat_tri22.lgb_test_matrix)))
+dat_tri22.lgb_obj = lightgbm(data = dat_tri22.lgb_train_data,
+                             params = list(learning_rate = c(0.1),
+                                           objective = c("regression"),
+                                           min_data_in_leaf = 100,
+                                           max_depth = c(5),
+                                           num_leaves = c(1000),
+                                           lambda_l2 = c(1),
+                                           boosting = c("gbdt")),
+                             valids = list(valid = dat_tri22.lgb_test_data),
+                             nrounds = 2000,
+                             early_stopping_rounds = 50)
+
+dat_tri22.lgb_train_pred = predict(dat_tri22.lgb_obj, data = as.matrix(dat_tri22.lgb_train_rules$data))
+cor(dat_tri22.lgb_train_pred, y, method="pearson")
+# 0.9015239 (nrounds = 901)
+
+dat_tri22.lgb_test_pred = predict(dat_tri22.lgb_obj, data = dat_tri22.lgb_test_matrix)
+
+cor(dat_tri22.lgb_test_pred, y_test, method="pearson")
+# 0.6664685 (nrounds = 901)
+
+mean((dat_tri22.lgb_test_pred - y_test)^2)
+# 0.1422248 (nrounds = 901)
+```
+
+We get test prediction correlation of 0.6664685 and MSE of 0.1422248
+
+
+
+
+
+# Inputs: Distance Frequency Between AA/TT/AT/TA and CC/GG/CG/GC Dinucleotides Only
+
+```{r}
+dist_freq_AorTdi = readRDS("data/Created/tiling_dist_freq_AorTdi.rds")
+dist_freq_AorTdi_test = readRDS("data/Created/tiling_dist_freq_AorTdi_test.rds")
+```
+
+## Simple Linear Model
+
+```{r}
+dat_dist_freq_AorTdi = cbind(dist_freq_AorTdi, dat %>% select(C0_new))
+
+dist_freq_AorTdi_lm = lm(C0_new~., data=dat_dist_freq_AorTdi)
+cor(dist_freq_AorTdi_lm$fitted.values, y)
+# 0.3815599
+
+dat_test_dist_freq_AorTdi = cbind(dist_freq_AorTdi_test, dat_test %>% select(C0_new))
+
+dist_freq_AorTdi_pred = predict(dist_freq_AorTdi_lm, dat_test_dist_freq_AorTdi)
+
+cor(dist_freq_AorTdi_pred, y_test)
+# 0.3852075
+
+mean((dist_freq_AorTdi_pred - y_test)^2)
+# 0.2174723
+```
+
+We get test prediction correlation of 0.3852075 and MSE of 0.2174723
+
+## LightGBM (tree-based) Model
+
+```{r}
+library(lightgbm)
+source("scripts/functions/lgbm-helper-functions.R")
+set.seed(50)
+dat_dist_freq_AorTdi.lgb_train_set = dat_dist_freq_AorTdi %>%
+  select(-C0_new)
+dat_dist_freq_AorTdi.lgb_train_rules = lgb.convert_with_rules(data = dat_dist_freq_AorTdi.lgb_train_set)
+dat_dist_freq_AorTdi.lgb_train_data = lgb.Dataset(data = as.matrix(dat_dist_freq_AorTdi.lgb_train_rules$data),
+                                                  label = dat_dist_freq_AorTdi$C0_new,
+                                                  categorical_feature = handle_categorical(colnames(dat_dist_freq_AorTdi.lgb_train_rules$data)))
+dat_dist_freq_AorTdi.lgb_test_set = dat_test_dist_freq_AorTdi %>%
+  select(-C0_new)
+dat_dist_freq_AorTdi.lgb_test_matrix = as.matrix(lgb.convert_with_rules(data = dat_dist_freq_AorTdi.lgb_test_set, rules = dat_dist_freq_AorTdi.lgb_train_rules$rules)$data)
+dat_dist_freq_AorTdi.lgb_test_data = lgb.Dataset(data = dat_dist_freq_AorTdi.lgb_test_matrix,
+                                                 label = dat_test_dist_freq_AorTdi$C0_new,
+                                                 categorical_feature = handle_categorical(colnames(dat_dist_freq_AorTdi.lgb_test_matrix)))
+dat_dist_freq_AorTdi.lgb_obj = lightgbm(data = dat_dist_freq_AorTdi.lgb_train_data,
+                                        params = list(learning_rate = c(0.1),
+                                                      objective = c("regression"),
+                                                      min_data_in_leaf = 100,
+                                                      max_depth = c(5),
+                                                      num_leaves = c(1000),
+                                                      lambda_l2 = c(1),
+                                                      boosting = c("gbdt")),
+                                        valids = list(valid = dat_dist_freq_AorTdi.lgb_test_data),
+                                        nrounds = 8000,
+                                        early_stopping_rounds = 50)
+
+dat_dist_freq_AorTdi.lgb_train_pred = predict(dat_dist_freq_AorTdi.lgb_obj, data = as.matrix(dat_dist_freq_AorTdi.lgb_train_rules$data))
+cor(dat_dist_freq_AorTdi.lgb_train_pred, y, method="pearson")
+# 0.44143 (nrounds = 183)
+
+dat_dist_freq_AorTdi.lgb_test_pred = predict(dat_dist_freq_AorTdi.lgb_obj, data = dat_dist_freq_AorTdi.lgb_test_matrix)
+
+cor(dat_dist_freq_AorTdi.lgb_test_pred, y_test, method="pearson")
+# 0.3921583 (nrounds = 183)
+
+mean((dat_dist_freq_AorTdi.lgb_test_pred - y_test)^2)
+# 0.2160953 (nrounds = 183)
+```
+
+We get test prediction correlation of 0.3921583 and MSE of 0.2160953
+
+```{r}
+dat_dist_freq_AorTdi.feature_importance = as.data.frame(lgb.importance(dat_dist_freq_AorTdi.lgb_obj)) %>%
+  mutate(Feature = fct_rev(fct_inorder(Feature))) %>%
+  dplyr::slice(1:50) %>%
+  ggplot(aes(x = Feature, y = Gain)) +
+  geom_col(fill = "dodgerblue") +
+  coord_flip() +
+  theme_bw()
+dat_dist_freq_AorTdi.feature_importance
+```
+
+
+
+
+
+# Inputs: Position Specific Dinucleotides + Counts of Trinucleotides +  Distance Frequency Between AA/TT/AT/TA and CC/GG/CG/GC Dinucleotides
+
+```{r}
+ps2 <- paste0("X", 1:49, "di")
+
+nucleotides <- c("A", "C", "G", "T")
+dinucleotides <- gtools::permutations(n = 4, r = 2, v = nucleotides,
+                                      repeats.allowed = TRUE) %>%
+  apply(1, paste, collapse = "")
+trinucleotides <- gtools::permutations(n = 4, r = 3, v = nucleotides,
+                                       repeats.allowed = TRUE) %>%
+  apply(1, paste, collapse = "")
+
+dist_freq_AorTdi = readRDS("data/Created/tiling_dist_freq_AorTdi.rds")
+dist_freq_AorTdi_test = readRDS("data/Created/tiling_dist_freq_AorTdi_test.rds")
+```
+
+## Simple Linear Model
+
+```{r}
+dat_dist_freq_AorTdi6 = cbind(dat %>% select(all_of(ps2), 
+                                             all_of(trinucleotides), C0_new), 
+                              dist_freq_AorTdi)
+
+dist_freq_AorTdi6_lm = lm(C0_new~., data=dat_dist_freq_AorTdi6)
+cor(dist_freq_AorTdi6_lm$fitted.values, y)
+# 0.5775594
+
+dat_test_dist_freq_AorTdi6 = cbind(dat_test %>% select(all_of(ps2), 
+                                                       all_of(trinucleotides), C0_new), 
+                                   dist_freq_AorTdi_test)
+
+dist_freq_AorTdi6_pred = predict(dist_freq_AorTdi6_lm, dat_test_dist_freq_AorTdi6)
+
+cor(dist_freq_AorTdi6_pred, y_test)
+# 0.5758411
+
+mean((dist_freq_AorTdi6_pred - y_test)^2)
+# 0.1706926
+```
+
+We get test prediction correlation of 0.5758411 and MSE of 0.1706926
+
+## LightGBM (tree-based) Model
+
+```{r}
+library(lightgbm)
+source("scripts/functions/lgbm-helper-functions.R")
+set.seed(50)
+dat_dist_freq_AorTdi6.lgb_train_set = dat_dist_freq_AorTdi6 %>%
+  select(-C0_new)
+dat_dist_freq_AorTdi6.lgb_train_rules = lgb.convert_with_rules(data = dat_dist_freq_AorTdi6.lgb_train_set)
+dat_dist_freq_AorTdi6.lgb_train_data = lgb.Dataset(data = as.matrix(dat_dist_freq_AorTdi6.lgb_train_rules$data),
+                                                   label = dat_dist_freq_AorTdi6$C0_new,
+                                                   categorical_feature = handle_categorical(colnames(dat_dist_freq_AorTdi6.lgb_train_rules$data)))
+dat_dist_freq_AorTdi6.lgb_test_set = dat_test_dist_freq_AorTdi6 %>%
+  select(-C0_new)
+dat_dist_freq_AorTdi6.lgb_test_matrix = as.matrix(lgb.convert_with_rules(data = dat_dist_freq_AorTdi6.lgb_test_set, rules = dat_dist_freq_AorTdi6.lgb_train_rules$rules)$data)
+dat_dist_freq_AorTdi6.lgb_test_data = lgb.Dataset(data = dat_dist_freq_AorTdi6.lgb_test_matrix,
+                                                  label = dat_test_dist_freq_AorTdi6$C0_new,
+                                                  categorical_feature = handle_categorical(colnames(dat_dist_freq_AorTdi6.lgb_test_matrix)))
+dat_dist_freq_AorTdi6.lgb_obj = lightgbm(data = dat_dist_freq_AorTdi6.lgb_train_data,
+                                         params = list(learning_rate = c(0.1),
+                                                       objective = c("regression"),
+                                                       min_data_in_leaf = 100,
+                                                       max_depth = c(5),
+                                                       num_leaves = c(1000),
+                                                       lambda_l2 = c(1),
+                                                       boosting = c("gbdt")),
+                                         valids = list(valid = dat_dist_freq_AorTdi6.lgb_test_data),
+                                         nrounds = 4000,
+                                         early_stopping_rounds = 50)
+
+dat_dist_freq_AorTdi6.lgb_train_pred = predict(dat_dist_freq_AorTdi6.lgb_obj, data = as.matrix(dat_dist_freq_AorTdi6.lgb_train_rules$data))
+cor(dat_dist_freq_AorTdi6.lgb_train_pred, y, method="pearson")
+# 0.9916673 (nrounds = 3228)
+
+dat_dist_freq_AorTdi6.lgb_test_pred = predict(dat_dist_freq_AorTdi6.lgb_obj, data = dat_dist_freq_AorTdi6.lgb_test_matrix)
+
+cor(dat_dist_freq_AorTdi6.lgb_test_pred, y_test, method="pearson")
+# 0.6918096 (nrounds = 3228)
+
+mean((dat_dist_freq_AorTdi6.lgb_test_pred - y_test)^2)
+# 0.1333103 (nrounds = 3228)
+```
+
+We get test prediction correlation of 0.6918096 and MSE of 0.1333103
+
+```{r}
+dat_dist_freq_AorTdi6.feature_importance = as.data.frame(lgb.importance(dat_dist_freq_AorTdi6.lgb_obj)) %>%
+  mutate(Feature = fct_rev(fct_inorder(Feature))) %>%
+  dplyr::slice(1:50) %>%
+  ggplot(aes(x = Feature, y = Gain)) +
+  geom_col(fill = "dodgerblue") +
+  coord_flip() +
+  theme_bw()
+dat_dist_freq_AorTdi6.feature_importance
+```
+
+
+
+
+
+# Inputs: All Distance Frequency Between AA/TT/AT/TA and CC/GG/CG/GC Dinucleotides Only
+
+```{r}
+dist_freq_AorTdi_AorTdi_bid2 = readRDS("data/Created/tiling_dist_freq_AorTdi_AorTdi_bid2.rds")
+dist_freq_AorTdi_CorGdi_bid2 = readRDS("data/Created/tiling_dist_freq_AorTdi_CorGdi_bid2.rds")
+dist_freq_CorGdi_CorGdi_bid2 = readRDS("data/Created/tiling_dist_freq_CorGdi_CorGdi_bid2.rds")
+dist_freq_AorTdi_AorTdi_bid2_test = readRDS("data/Created/tiling_dist_freq_AorTdi_AorTdi_bid2_test.rds")
+dist_freq_AorTdi_CorGdi_bid2_test = readRDS("data/Created/tiling_dist_freq_AorTdi_CorGdi_bid2_test.rds")
+dist_freq_CorGdi_CorGdi_bid2_test = readRDS("data/Created/tiling_dist_freq_CorGdi_CorGdi_bid2_test.rds")
+dist_freq_AorTdi_AorTdi_bid2_random_all = readRDS("data/Created/random_all_dist_freq_AorTdi_AorTdi_bid2.rds")
+dist_freq_AorTdi_CorGdi_bid2_random_all = readRDS("data/Created/random_all_dist_freq_AorTdi_CorGdi_bid2.rds")
+dist_freq_CorGdi_CorGdi_bid2_random_all = readRDS("data/Created/random_all_dist_freq_CorGdi_CorGdi_bid2.rds")
+```
+
+## Simple Linear Model
+
+```{r}
+dat_all_dist_freq_AorTdi_bid = cbind(dist_freq_AorTdi_AorTdi_bid2, 
+                                     dist_freq_AorTdi_CorGdi_bid2,
+                                     dist_freq_CorGdi_CorGdi_bid2,
+                                     dat %>% select(C0_new))
+
+all_dist_freq_AorTdi_bid_lm = lm(C0_new~., data=dat_all_dist_freq_AorTdi_bid)
+cor(all_dist_freq_AorTdi_bid_lm$fitted.values, y)
+# 0.4812778
+
+dat_test_all_dist_freq_AorTdi_bid = cbind(dist_freq_AorTdi_AorTdi_bid2_test,
+                                          dist_freq_AorTdi_CorGdi_bid2_test,
+                                          dist_freq_CorGdi_CorGdi_bid2_test,
+                                          dat_test %>% select(C0_new))
+
+all_dist_freq_AorTdi_bid_pred = predict(all_dist_freq_AorTdi_bid_lm, 
+                                        dat_test_all_dist_freq_AorTdi_bid)
+
+cor(all_dist_freq_AorTdi_bid_pred, y_test)
+# 0.4788179
+
+mean((all_dist_freq_AorTdi_bid_pred - y_test)^2)
+# 0.196805
+
+dat_random_all_all_dist_freq_AorTdi_bid = cbind(dist_freq_AorTdi_AorTdi_bid2_random_all,
+                                                dist_freq_AorTdi_CorGdi_bid2_random_all,
+                                                dist_freq_CorGdi_CorGdi_bid2_random_all,
+                                                dat_random_all %>% select(C0_new))
+
+all_dist_freq_AorTdi_bid_pred_random_all = predict(all_dist_freq_AorTdi_bid_lm, 
+                                                   dat_random_all_all_dist_freq_AorTdi_bid)
+
+cor(all_dist_freq_AorTdi_bid_pred_random_all, y_random_all)
+# 0.390887
+
+mean((all_dist_freq_AorTdi_bid_pred_random_all - y_random_all)^2)
+# 0.1354306
+```
+
+We get test prediction correlation of 0.4788179 and MSE of 0.196805
+
+## Lasso Model
+
+```{r}
+X_all_dist_freq_AorTdi_bid = dat_all_dist_freq_AorTdi_bid %>%
+  select(-C0_new)
+
+x_all_dist_freq_AorTdi_bid = sparse.model.matrix(~., data=X_all_dist_freq_AorTdi_bid)
+
+set.seed(50)
+la.model_all_dist_freq_AorTdi_bid = cv.glmnet(x_all_dist_freq_AorTdi_bid, y, alpha=1, family="gaussian")
+
+la.all_dist_freq_AorTdi_bid_best_lambda = la.model_all_dist_freq_AorTdi_bid$lambda.min
+
+sum(coef(la.model_all_dist_freq_AorTdi_bid, s=la.all_dist_freq_AorTdi_bid_best_lambda) != 0)
+# 141
+
+la.all_dist_freq_AorTdi_bid_lambda_1se = la.model_all_dist_freq_AorTdi_bid$lambda.1se
+
+sum(coef(la.model_all_dist_freq_AorTdi_bid, s=la.all_dist_freq_AorTdi_bid_lambda_1se) != 0)
+# 85
+
+saveRDS(la.model_all_dist_freq_AorTdi_bid, "model/lasso-all_dist_freq_AorTdi_bid.rds")
+
+la.model_all_dist_freq_AorTdi_bid.train_pred = predict(la.model_all_dist_freq_AorTdi_bid, newx = x_all_dist_freq_AorTdi_bid, s=la.all_dist_freq_AorTdi_bid_best_lambda)
+
+cor(la.model_all_dist_freq_AorTdi_bid.train_pred, y, method="pearson")
+# 0.4810667
+mean((la.model_all_dist_freq_AorTdi_bid.train_pred - y)^2)
+# 0.1969794
+
+la.model_all_dist_freq_AorTdi_bid.train_pred2 = predict(la.model_all_dist_freq_AorTdi_bid, newx = x_all_dist_freq_AorTdi_bid, s=la.all_dist_freq_AorTdi_bid_lambda_1se)
+
+cor(la.model_all_dist_freq_AorTdi_bid.train_pred2, y, method="pearson")
+# 0.4763798
+mean((la.model_all_dist_freq_AorTdi_bid.train_pred2 - y)^2)
+# 0.1985532
+
+X_all_dist_freq_AorTdi_bid_test = dat_test_all_dist_freq_AorTdi_bid %>%
+  select(-C0_new)
+x_all_dist_freq_AorTdi_bid_test = sparse.model.matrix(~., data=X_all_dist_freq_AorTdi_bid_test)
+
+# Predict values for test dataset:
+la.model_all_dist_freq_AorTdi_bid.pred = predict(la.model_all_dist_freq_AorTdi_bid, newx = x_all_dist_freq_AorTdi_bid_test, s=la.all_dist_freq_AorTdi_bid_best_lambda)
+# Prediction accuracy with test data:
+cor(la.model_all_dist_freq_AorTdi_bid.pred, y_test, method="pearson")
+# 0.4785829
+mean((la.model_all_dist_freq_AorTdi_bid.pred - y_test)^2)
+# 0.196863
+
+la.model_all_dist_freq_AorTdi_bid.pred2 = predict(la.model_all_dist_freq_AorTdi_bid, newx = x_all_dist_freq_AorTdi_bid_test, s=la.all_dist_freq_AorTdi_bid_lambda_1se)
+# Prediction accuracy with test data:
+cor(la.model_all_dist_freq_AorTdi_bid.pred2, y_test, method="pearson")
+# 0.4777172
+mean((la.model_all_dist_freq_AorTdi_bid.pred2 - y_test)^2)
+# 0.197597
+```
+
+We get test prediction correlation of 0.4785829 and MSE of 0.196863 with min lasso (141 nonzero)
+We get test prediction correlation of 0.4777172 and MSE of 0.197597 with lasso 1se (85 nonzero)
+
+## LightGBM (tree-based) Model
+
+```{r}
+library(lightgbm)
+source("scripts/functions/lgbm-helper-functions.R")
+set.seed(50)
+dat_all_dist_freq_AorTdi_bid.lgb_train_set = dat_all_dist_freq_AorTdi_bid %>%
+  select(-C0_new)
+dat_all_dist_freq_AorTdi_bid.lgb_train_rules = lgb.convert_with_rules(data = dat_all_dist_freq_AorTdi_bid.lgb_train_set)
+dat_all_dist_freq_AorTdi_bid.lgb_train_data = lgb.Dataset(data = as.matrix(dat_all_dist_freq_AorTdi_bid.lgb_train_rules$data),
+                                                          label = dat_all_dist_freq_AorTdi_bid$C0_new,
+                                                          categorical_feature = handle_categorical(colnames(dat_all_dist_freq_AorTdi_bid.lgb_train_rules$data)))
+dat_all_dist_freq_AorTdi_bid.lgb_test_set = dat_test_all_dist_freq_AorTdi_bid %>%
+  select(-C0_new)
+dat_all_dist_freq_AorTdi_bid.lgb_test_matrix = as.matrix(lgb.convert_with_rules(data = dat_all_dist_freq_AorTdi_bid.lgb_test_set, rules = dat_all_dist_freq_AorTdi_bid.lgb_train_rules$rules)$data)
+dat_all_dist_freq_AorTdi_bid.lgb_test_data = lgb.Dataset(data = dat_all_dist_freq_AorTdi_bid.lgb_test_matrix,
+                                                         label = dat_test_all_dist_freq_AorTdi_bid$C0_new,
+                                                         categorical_feature = handle_categorical(colnames(dat_all_dist_freq_AorTdi_bid.lgb_test_matrix)))
+dat_all_dist_freq_AorTdi_bid.lgb_obj = lightgbm(data = dat_all_dist_freq_AorTdi_bid.lgb_train_data,
+                                                params = list(learning_rate = c(0.1),
+                                                              objective = c("regression"),
+                                                              min_data_in_leaf = 100,
+                                                              max_depth = c(5),
+                                                              num_leaves = c(1000),
+                                                              lambda_l2 = c(1),
+                                                              boosting = c("gbdt")),
+                                                valids = list(valid = dat_all_dist_freq_AorTdi_bid.lgb_test_data),
+                                                nrounds = 8000,
+                                                early_stopping_rounds = 50)
+
+dat_all_dist_freq_AorTdi_bid.lgb_train_pred = predict(dat_all_dist_freq_AorTdi_bid.lgb_obj, data = as.matrix(dat_all_dist_freq_AorTdi_bid.lgb_train_rules$data))
+cor(dat_all_dist_freq_AorTdi_bid.lgb_train_pred, y, method="pearson")
+# 0.6687697 (nrounds = 764)
+
+dat_all_dist_freq_AorTdi_bid.lgb_test_pred = predict(dat_all_dist_freq_AorTdi_bid.lgb_obj, data = dat_all_dist_freq_AorTdi_bid.lgb_test_matrix)
+
+cor(dat_all_dist_freq_AorTdi_bid.lgb_test_pred, y_test, method="pearson")
+# 0.4900612 (nrounds = 764)
+
+mean((dat_all_dist_freq_AorTdi_bid.lgb_test_pred - y_test)^2)
+# 0.1941376 (nrounds = 764)
+```
+
+We get test prediction correlation of 0.4900612 and MSE of 0.1941376
+
+```{r}
+dat_all_dist_freq_AorTdi_bid.feature_importance = as.data.frame(lgb.importance(dat_all_dist_freq_AorTdi_bid.lgb_obj)) %>%
+  mutate(Feature = fct_rev(fct_inorder(Feature))) %>%
+  dplyr::slice(1:50) %>%
+  ggplot(aes(x = Feature, y = Gain)) +
+  geom_col(fill = "dodgerblue") +
+  coord_flip() +
+  theme_bw()
+dat_all_dist_freq_AorTdi_bid.feature_importance
+```
+
+
+
+
+
+
+# Inputs: Distance Frequency Between Dinucleotides and AA/TT/AT/TA or CC/GG/CG/GC Dinucleotides Only
+
+```{r}
+dist_freq_di_AorTdi_bid = readRDS("data/Created/tiling_dist_freq_di_AorTdi_bid.rds")
+dist_freq_di_AorTdi_bid_test = readRDS("data/Created/tiling_dist_freq_di_AorTdi_bid_test.rds")
+```
+
+## Simple Linear Model
+
+```{r}
+dat_dist_freq_di_AorTdi_bid = cbind(dist_freq_di_AorTdi_bid, dat %>% select(C0_new))
+
+dist_freq_di_AorTdi_bid_lm = lm(C0_new~., data=dat_dist_freq_di_AorTdi_bid)
+cor(dist_freq_di_AorTdi_bid_lm$fitted.values, y)
+# 0.5643965
+
+dat_test_dist_freq_di_AorTdi_bid = cbind(dist_freq_di_AorTdi_bid_test, dat_test %>% select(C0_new))
+
+dist_freq_di_AorTdi_bid_pred = predict(dist_freq_di_AorTdi_bid_lm, dat_test_dist_freq_di_AorTdi_bid)
+
+cor(dist_freq_di_AorTdi_bid_pred, y_test)
+# 0.5660551
+
+mean((dist_freq_di_AorTdi_bid_pred - y_test)^2)
+# 0.173541
+```
+
+We get test prediction correlation of 0.5660551 and MSE of 0.173541
+
+## LightGBM (tree-based) Model
+
+```{r}
+library(lightgbm)
+source("scripts/functions/lgbm-helper-functions.R")
+set.seed(50)
+dat_dist_freq_di_AorTdi_bid.lgb_train_set = dat_dist_freq_di_AorTdi_bid %>%
+  select(-C0_new)
+dat_dist_freq_di_AorTdi_bid.lgb_train_rules = lgb.convert_with_rules(data = dat_dist_freq_di_AorTdi_bid.lgb_train_set)
+dat_dist_freq_di_AorTdi_bid.lgb_train_data = lgb.Dataset(data = as.matrix(dat_dist_freq_di_AorTdi_bid.lgb_train_rules$data),
+                                                         label = dat_dist_freq_di_AorTdi_bid$C0_new,
+                                                         categorical_feature = handle_categorical(colnames(dat_dist_freq_di_AorTdi_bid.lgb_train_rules$data)))
+dat_dist_freq_di_AorTdi_bid.lgb_test_set = dat_test_dist_freq_di_AorTdi_bid %>%
+  select(-C0_new)
+dat_dist_freq_di_AorTdi_bid.lgb_test_matrix = as.matrix(lgb.convert_with_rules(data = dat_dist_freq_di_AorTdi_bid.lgb_test_set, rules = dat_dist_freq_di_AorTdi_bid.lgb_train_rules$rules)$data)
+dat_dist_freq_di_AorTdi_bid.lgb_test_data = lgb.Dataset(data = dat_dist_freq_di_AorTdi_bid.lgb_test_matrix,
+                                                        label = dat_test_dist_freq_di_AorTdi_bid$C0_new,
+                                                        categorical_feature = handle_categorical(colnames(dat_dist_freq_di_AorTdi_bid.lgb_test_matrix)))
+dat_dist_freq_di_AorTdi_bid.lgb_obj = lightgbm(data = dat_dist_freq_di_AorTdi_bid.lgb_train_data,
+                                               params = list(learning_rate = c(0.1),
+                                                             objective = c("regression"),
+                                                             min_data_in_leaf = 100,
+                                                             max_depth = c(5),
+                                                             num_leaves = c(1000),
+                                                             lambda_l2 = c(1),
+                                                             boosting = c("gbdt")),
+                                               valids = list(valid = dat_dist_freq_di_AorTdi_bid.lgb_test_data),
+                                               nrounds = 8000,
+                                               early_stopping_rounds = 50)
+
+dat_dist_freq_di_AorTdi_bid.lgb_train_pred = predict(dat_dist_freq_di_AorTdi_bid.lgb_obj, data = as.matrix(dat_dist_freq_di_AorTdi_bid.lgb_train_rules$data))
+cor(dat_dist_freq_di_AorTdi_bid.lgb_train_pred, y, method="pearson")
+# 0.8955684 (nrounds = 3250)
+
+dat_dist_freq_di_AorTdi_bid.lgb_test_pred = predict(dat_dist_freq_di_AorTdi_bid.lgb_obj, data = dat_dist_freq_di_AorTdi_bid.lgb_test_matrix)
+
+cor(dat_dist_freq_di_AorTdi_bid.lgb_test_pred, y_test, method="pearson")
+# 0.6450898 (nrounds = 3250)
+
+mean((dat_dist_freq_di_AorTdi_bid.lgb_test_pred - y_test)^2)
+# 0.1491235 (nrounds = 3250)
+```
+
+We get test prediction correlation of 0.6450898 and MSE of 0.1491235
+
+```{r}
+dat_dist_freq_di_AorTdi_bid.feature_importance = as.data.frame(lgb.importance(dat_dist_freq_di_AorTdi_bid.lgb_obj)) %>%
+  mutate(Feature = fct_rev(fct_inorder(Feature))) %>%
+  dplyr::slice(1:50) %>%
+  ggplot(aes(x = Feature, y = Gain)) +
+  geom_col(fill = "dodgerblue") +
+  coord_flip() +
+  theme_bw()
+dat_dist_freq_di_AorTdi_bid.feature_importance
+```
+
+
+
+
+
+# Inputs: All Distance Frequency Between Dinucleotides and AA/TT/AT/TA or CC/GG/CG/GC Dinucleotides Only
+
+```{r}
+library(Matrix)
+library(glmnet)
+library(sparsegl)
+
+dist_freq_di_AorTdi_bid2 = readRDS("data/Created/tiling_dist_freq_di_AorTdi_bid2.rds")
+dist_freq_di_CorGdi_bid2 = readRDS("data/Created/tiling_dist_freq_di_CorGdi_bid2.rds")
+dist_freq_di_AorTdi_bid2_test = readRDS("data/Created/tiling_dist_freq_di_AorTdi_bid2_test.rds")
+dist_freq_di_CorGdi_bid2_test = readRDS("data/Created/tiling_dist_freq_di_CorGdi_bid2_test.rds")
+
+dist_freq_di_AorTdi_bid2_random_all = readRDS("data/Created/random_all_dist_freq_di_AorTdi_bid2.rds")
+dist_freq_di_CorGdi_bid2_random_all = readRDS("data/Created/random_all_dist_freq_di_CorGdi_bid2.rds")
+```
+
+## Simple Linear Model
+
+```{r}
+dat_all_dist_freq_di_AorTdi_bid = cbind(dist_freq_di_AorTdi_bid2,
+                                        dist_freq_di_CorGdi_bid2,
+                                        dat %>% select(C0_new))
+
+all_dist_freq_di_AorTdi_bid_lm = lm(C0_new~., data=dat_all_dist_freq_di_AorTdi_bid)
+cor(all_dist_freq_di_AorTdi_bid_lm$fitted.values, y)
+# 0.7286063
+
+dat_test_all_dist_freq_di_AorTdi_bid = cbind(dist_freq_di_AorTdi_bid2_test,
+                                             dist_freq_di_CorGdi_bid2_test,
+                                             dat_test %>% select(C0_new))
+
+all_dist_freq_di_AorTdi_bid_pred = predict(all_dist_freq_di_AorTdi_bid_lm, dat_test_all_dist_freq_di_AorTdi_bid)
+
+cor(all_dist_freq_di_AorTdi_bid_pred, y_test)
+# 0.7271183
+
+mean((all_dist_freq_di_AorTdi_bid_pred - y_test)^2)
+# 0.1203817
+
+dat_random_all_dist_freq_di_AorTdi_bid = cbind(dist_freq_di_AorTdi_bid2_random_all,
+                                               dist_freq_di_CorGdi_bid2_random_all,
+                                               dat_random_all %>% select(C0_new))
+
+random_all_dist_freq_di_AorTdi_bid_pred = predict(all_dist_freq_di_AorTdi_bid_lm, dat_random_all_dist_freq_di_AorTdi_bid)
+
+cor(random_all_dist_freq_di_AorTdi_bid_pred, y_random_all)
+# 0.6499191
+```
+
+We get test prediction correlation of 0.7271183 and MSE of 0.1203817
+We get prediction correlation of 0.6499191 on the random library
+
+
+
+
+# Inputs: Position Specific Dinucleotides + All Distance Frequency Between Dinucleotides and AA/TT/AT/TA or CC/GG/CG/GC Dinucleotides
+
+```{r}
+ps2 <- paste0("X", 1:49, "di")
+
+dist_freq_di_AorTdi_bid2 = readRDS("data/Created/tiling_dist_freq_di_AorTdi_bid2.rds")
+dist_freq_di_CorGdi_bid2 = readRDS("data/Created/tiling_dist_freq_di_CorGdi_bid2.rds")
+dist_freq_di_AorTdi_bid2_test = readRDS("data/Created/tiling_dist_freq_di_AorTdi_bid2_test.rds")
+dist_freq_di_CorGdi_bid2_test = readRDS("data/Created/tiling_dist_freq_di_CorGdi_bid2_test.rds")
+```
+
+## Simple Linear Model
+
+```{r}
+dat_all_dist_freq_di_AorTdi_bid2 = cbind(dat %>% select(all_of(ps2), C0_new), 
+                                         dist_freq_di_AorTdi_bid2,
+                                         dist_freq_di_CorGdi_bid2)
+
+all_dist_freq_di_AorTdi_bid2_lm = lm(C0_new~., data=dat_all_dist_freq_di_AorTdi_bid2)
+cor(all_dist_freq_di_AorTdi_bid2_lm$fitted.values, y)
+# 
+
+dat_test_all_dist_freq_di_AorTdi_bid2 = cbind(dat_test %>% select(all_of(ps2), C0_new), 
+                                              dist_freq_di_AorTdi_bid2_test,
+                                              dist_freq_di_CorGdi_bid2_test)
+
+all_dist_freq_di_AorTdi_bid2_pred = predict(all_dist_freq_di_AorTdi_bid2_lm, dat_test_all_dist_freq_di_AorTdi_bid2)
+
+cor(all_dist_freq_di_AorTdi_bid2_pred, y_test)
+# 
+
+mean((all_dist_freq_di_AorTdi_bid2_pred - y_test)^2)
+# 
+
+dat_random_all_all_dist_freq_di_AorTdi_bid2 = cbind(dat_random_all %>% 
+                                                      select(all_of(ps2), C0_new),
+                                                    dist_freq_di_AorTdi_bid2_random_all,
+                                                    dist_freq_di_CorGdi_bid2_random_all)
+
+all_dist_freq_di_AorTdi_bid2_pred_random_all = predict(all_dist_freq_di_AorTdi_bid2_lm, dat_random_all_all_dist_freq_di_AorTdi_bid2)
+
+cor(all_dist_freq_di_AorTdi_bid2_pred_random_all, y_random_all)
+# 
+
+mean((all_dist_freq_di_AorTdi_bid2_pred_random_all - y_random_all)^2)
+# 
+```
+
+We get test prediction correlation of  and MSE of 
+We get test prediction correlation of  and MSE of  on the Random Library
+
+## LightGBM (tree-based) Model
+
+```{r}
+library(lightgbm)
+source("scripts/functions/lgbm-helper-functions.R")
+set.seed(50)
+dat_all_dist_freq_di_AorTdi_bid2.lgb_train_set = dat_all_dist_freq_di_AorTdi_bid2 %>%
+  select(-C0_new)
+dat_all_dist_freq_di_AorTdi_bid2.lgb_train_rules = lgb.convert_with_rules(data = dat_all_dist_freq_di_AorTdi_bid2.lgb_train_set)
+dat_all_dist_freq_di_AorTdi_bid2.lgb_train_data = lgb.Dataset(data = as.matrix(dat_all_dist_freq_di_AorTdi_bid2.lgb_train_rules$data),
+                                                              label = dat_all_dist_freq_di_AorTdi_bid2$C0_new,
+                                                              categorical_feature = handle_categorical(colnames(dat_all_dist_freq_di_AorTdi_bid2.lgb_train_rules$data)))
+dat_all_dist_freq_di_AorTdi_bid2.lgb_test_set = dat_test_all_dist_freq_di_AorTdi_bid2 %>%
+  select(-C0_new)
+dat_all_dist_freq_di_AorTdi_bid2.lgb_test_matrix = as.matrix(lgb.convert_with_rules(data = dat_all_dist_freq_di_AorTdi_bid2.lgb_test_set, rules = dat_all_dist_freq_di_AorTdi_bid2.lgb_train_rules$rules)$data)
+dat_all_dist_freq_di_AorTdi_bid2.lgb_test_data = lgb.Dataset(data = dat_all_dist_freq_di_AorTdi_bid2.lgb_test_matrix,
+                                                             label = dat_test_all_dist_freq_di_AorTdi_bid2$C0_new,
+                                                             categorical_feature = handle_categorical(colnames(dat_all_dist_freq_di_AorTdi_bid2.lgb_test_matrix)))
+dat_all_dist_freq_di_AorTdi_bid2.lgb_obj = lightgbm(data = dat_all_dist_freq_di_AorTdi_bid2.lgb_train_data,
+                                                    params = list(learning_rate = c(0.1),
+                                                                  objective = c("regression"),
+                                                                  min_data_in_leaf = 100,
+                                                                  max_depth = c(5),
+                                                                  num_leaves = c(1000),
+                                                                  lambda_l2 = c(1),
+                                                                  boosting = c("gbdt")),
+                                                    valids = list(valid = dat_all_dist_freq_di_AorTdi_bid2.lgb_test_data),
+                                                    nrounds = 8000,
+                                                    early_stopping_rounds = 50)
+
+dat_all_dist_freq_di_AorTdi_bid2.lgb_train_pred = predict(dat_all_dist_freq_di_AorTdi_bid2.lgb_obj, data = as.matrix(dat_all_dist_freq_di_AorTdi_bid2.lgb_train_rules$data))
+cor(dat_all_dist_freq_di_AorTdi_bid2.lgb_train_pred, y, method="pearson")
+#  (nrounds = )
+
+dat_all_dist_freq_di_AorTdi_bid2.lgb_test_pred = predict(dat_all_dist_freq_di_AorTdi_bid2.lgb_obj, data = dat_all_dist_freq_di_AorTdi_bid2.lgb_test_matrix)
+
+cor(dat_all_dist_freq_di_AorTdi_bid2.lgb_test_pred, y_test, method="pearson")
+#  (nrounds = )
+
+mean((dat_all_dist_freq_di_AorTdi_bid2.lgb_test_pred - y_test)^2)
+#  (nrounds = )
+```
+
+We get test prediction correlation of  and MSE of 
+
+```{r}
+dat_all_dist_freq_di_AorTdi_bid2.feature_importance = as.data.frame(lgb.importance(dat_all_dist_freq_di_AorTdi_bid2.lgb_obj)) %>%
+  mutate(Feature = fct_rev(fct_inorder(Feature))) %>%
+  dplyr::slice(1:50) %>%
+  ggplot(aes(x = Feature, y = Gain)) +
+  geom_col(fill = "dodgerblue") +
+  coord_flip() +
+  theme_bw()
+dat_all_dist_freq_di_AorTdi_bid2.feature_importance
+```
+
+# Inputs: Counts of Trinucleotides + All Distance Frequency Between Dinucleotides and AA/TT/AT/TA or CC/GG/CG/GC Dinucleotides
+
+```{r}
+nucleotides <- c("A", "C", "G", "T")
+dinucleotides <- gtools::permutations(n = 4, r = 2, v = nucleotides,
+                                      repeats.allowed = TRUE) %>%
+  apply(1, paste, collapse = "")
+trinucleotides <- gtools::permutations(n = 4, r = 3, v = nucleotides,
+                                       repeats.allowed = TRUE) %>%
+  apply(1, paste, collapse = "")
+
+dist_freq_di_AorTdi_bid2 = readRDS("data/Created/tiling_dist_freq_di_AorTdi_bid2.rds")
+dist_freq_di_CorGdi_bid2 = readRDS("data/Created/tiling_dist_freq_di_CorGdi_bid2.rds")
+dist_freq_di_AorTdi_bid2_test = readRDS("data/Created/tiling_dist_freq_di_AorTdi_bid2_test.rds")
+dist_freq_di_CorGdi_bid2_test = readRDS("data/Created/tiling_dist_freq_di_CorGdi_bid2_test.rds")
+
+dist_freq_di_AorTdi_bid2_random_all = readRDS("data/Created/random_all_dist_freq_di_AorTdi_bid2.rds")
+dist_freq_di_CorGdi_bid2_random_all = readRDS("data/Created/random_all_dist_freq_di_CorGdi_bid2.rds")
+
+dist_freq_di_AorTdi_bid2_chrV_all = readRDS("data/Created/chrV_all_dist_freq_di_AorTdi_bid2.rds")
+dist_freq_di_CorGdi_bid2_chrV_all = readRDS("data/Created/chrV_all_dist_freq_di_CorGdi_bid2.rds")
+
+dist_freq_di_AorTdi_bid2_yeast_all = readRDS("data/Created/yeast_all_dist_freq_di_AorTdi_bid2.rds")
+dist_freq_di_CorGdi_bid2_yeast_all = readRDS("data/Created/yeast_all_dist_freq_di_CorGdi_bid2.rds")
+```
+
+## Simple Linear Model
+
+```{r}
+dat_all_dist_freq_di_AorTdi_bid4 = cbind(dat %>% 
+                                           select(all_of(trinucleotides), C0_new), 
+                                         dist_freq_di_AorTdi_bid2,
+                                         dist_freq_di_CorGdi_bid2)
+
+all_dist_freq_di_AorTdi_bid4_lm = lm(C0_new~., data=dat_all_dist_freq_di_AorTdi_bid4)
+cor(all_dist_freq_di_AorTdi_bid4_lm$fitted.values, y)
+# 0.7377465
+
+dat_test_all_dist_freq_di_AorTdi_bid4 = cbind(dat_test %>% 
+                                                select(all_of(trinucleotides), C0_new), 
+                                              dist_freq_di_AorTdi_bid2_test,
+                                              dist_freq_di_CorGdi_bid2_test)
+
+all_dist_freq_di_AorTdi_bid4_pred = predict(all_dist_freq_di_AorTdi_bid4_lm, dat_test_all_dist_freq_di_AorTdi_bid4)
+
+cor(all_dist_freq_di_AorTdi_bid4_pred, y_test)
+# 0.7361906
+
+mean((all_dist_freq_di_AorTdi_bid4_pred - y_test)^2)
+# 0.1169857
+
+dat_random_all_all_dist_freq_di_AorTdi_bid4 = cbind(dat_random_all %>% 
+                                                      select(all_of(trinucleotides), C0_new),
+                                                    dist_freq_di_AorTdi_bid2_random_all,
+                                                    dist_freq_di_CorGdi_bid2_random_all)
+
+all_dist_freq_di_AorTdi_bid4_pred_random_all = predict(all_dist_freq_di_AorTdi_bid4_lm, dat_random_all_all_dist_freq_di_AorTdi_bid4)
+
+cor(all_dist_freq_di_AorTdi_bid4_pred_random_all, y_random_all)
+# 0.6662929
+
+mean((all_dist_freq_di_AorTdi_bid4_pred_random_all - y_random_all)^2)
+# 0.08754538
+
+dat_chrV_all_all_dist_freq_di_AorTdi_bid4 = cbind(dat_chrV_all %>% 
+                                                    select(all_of(trinucleotides),
+                                                           C0_new),
+                                                  dist_freq_di_AorTdi_bid2_chrV_all,
+                                                  dist_freq_di_CorGdi_bid2_chrV_all)
+
+all_dist_freq_di_AorTdi_bid4_pred_chrV_all = predict(all_dist_freq_di_AorTdi_bid4_lm, dat_chrV_all_all_dist_freq_di_AorTdi_bid4)
+
+cor(all_dist_freq_di_AorTdi_bid4_pred_chrV_all, y_chrV_all)
+# 0.5992282
+
+mean((all_dist_freq_di_AorTdi_bid4_pred_chrV_all - y_chrV_all)^2)
+# 0.1931389
+
+dat_yeast_all_all_dist_freq_di_AorTdi_bid4 = cbind(dat_yeast_all %>% 
+                                                     select(all_of(trinucleotides),
+                                                            C0_new),
+                                                   dist_freq_di_AorTdi_bid2_yeast_all,
+                                                   dist_freq_di_CorGdi_bid2_yeast_all)
+
+all_dist_freq_di_AorTdi_bid4_pred_yeast_all = predict(all_dist_freq_di_AorTdi_bid4_lm, dat_yeast_all_all_dist_freq_di_AorTdi_bid4)
+
+cor(all_dist_freq_di_AorTdi_bid4_pred_yeast_all, y_yeast_all)
+# 0.6509058
+
+mean((all_dist_freq_di_AorTdi_bid4_pred_yeast_all - y_yeast_all)^2)
+# 0.1272535
+```
+
+We get test prediction correlation of 0.7361906 and MSE of 0.1169857
+We get test prediction correlation of 0.6662929 and MSE of 0.08754538 on the Random Library
+We get test prediction correlation of 0.5992282 and MSE of 0.1931389 on the ChrV Library
+We get test prediction correlation of 0.6509058 and MSE of 0.1272535 on the Yeast Library
+
+## Lasso Model
+
+```{r}
+X_all_dist_freq_di_AorTdi_bid4 = dat_all_dist_freq_di_AorTdi_bid4 %>%
+  select(-C0_new)
+x_all_dist_freq_di_AorTdi_bid4 = sparse.model.matrix(~ ., data=X_all_dist_freq_di_AorTdi_bid4)
+
+set.seed(50)
+la.model_all_dist_freq_di_AorTdi_bid4 = cv.glmnet(x_all_dist_freq_di_AorTdi_bid4, y, alpha=1, family="gaussian")
+
+la.all_dist_freq_di_AorTdi_bid4_best_lambda = la.model_all_dist_freq_di_AorTdi_bid4$lambda.min
+
+sum(coef(la.model_all_dist_freq_di_AorTdi_bid4, s=la.all_dist_freq_di_AorTdi_bid4_best_lambda) != 0)
+# 1435
+
+la.model_all_dist_freq_di_AorTdi_bid4.train_pred = predict(la.model_all_dist_freq_di_AorTdi_bid4, 
+                                                           newx = x_all_dist_freq_di_AorTdi_bid4, 
+                                                           s=la.all_dist_freq_di_AorTdi_bid4_best_lambda)
+
+
+cor(la.model_all_dist_freq_di_AorTdi_bid4.train_pred, y, method="pearson")
+# 0.7370035
+mean((la.model_all_dist_freq_di_AorTdi_bid4.train_pred - y)^2)
+# 0.1170912
+
+
+X_all_dist_freq_di_AorTdi_bid4_test = dat_test_all_dist_freq_di_AorTdi_bid4 %>%
+  select(-C0_new)
+x_all_dist_freq_di_AorTdi_bid4_test = sparse.model.matrix(~., data=X_all_dist_freq_di_AorTdi_bid4_test)
+
+la.model_all_dist_freq_di_AorTdi_bid4.pred = predict(la.model_all_dist_freq_di_AorTdi_bid4, 
+                                                     newx = x_all_dist_freq_di_AorTdi_bid4_test, 
+                                                     s=la.all_dist_freq_di_AorTdi_bid4_best_lambda)
+
+cor(la.model_all_dist_freq_di_AorTdi_bid4.pred, y_test, method="pearson")
+# 0.7357136
+mean((la.model_all_dist_freq_di_AorTdi_bid4.pred - y_test)^2)
+# 0.117151
+
+
+
+X_all_dist_freq_di_AorTdi_bid4_random_all = dat_random_all_all_dist_freq_di_AorTdi_bid4 %>%
+  select(-C0_new)
+x_all_dist_freq_di_AorTdi_bid4_random_all = sparse.model.matrix(~., data=X_all_dist_freq_di_AorTdi_bid4_random_all)
+
+la.model_all_dist_freq_di_AorTdi_bid4.pred_random_all = predict(la.model_all_dist_freq_di_AorTdi_bid4, 
+                                                     newx = x_all_dist_freq_di_AorTdi_bid4_random_all, 
+                                                     s=la.all_dist_freq_di_AorTdi_bid4_best_lambda)
+
+cor(la.model_all_dist_freq_di_AorTdi_bid4.pred_random_all, y_random_all, method="pearson")
+# 0.6666032
+mean((la.model_all_dist_freq_di_AorTdi_bid4.pred_random_all - y_random_all)^2)
+# 0.08718924
+
+
+X_all_dist_freq_di_AorTdi_bid4_chrV_all = dat_chrV_all_all_dist_freq_di_AorTdi_bid4 %>%
+  select(-C0_new)
+x_all_dist_freq_di_AorTdi_bid4_chrV_all = sparse.model.matrix(~., data=X_all_dist_freq_di_AorTdi_bid4_chrV_all)
+
+la.model_all_dist_freq_di_AorTdi_bid4.pred_chrV_all = predict(la.model_all_dist_freq_di_AorTdi_bid4, 
+                                                     newx = x_all_dist_freq_di_AorTdi_bid4_chrV_all, 
+                                                     s=la.all_dist_freq_di_AorTdi_bid4_best_lambda)
+
+cor(la.model_all_dist_freq_di_AorTdi_bid4.pred_chrV_all, y_chrV_all, method="pearson")
+# 0.5996725
+mean((la.model_all_dist_freq_di_AorTdi_bid4.pred_chrV_all - y_chrV_all)^2)
+# 0.1928001
+
+
+X_all_dist_freq_di_AorTdi_bid4_yeast_all = dat_yeast_all_all_dist_freq_di_AorTdi_bid4 %>%
+  select(-C0_new)
+x_all_dist_freq_di_AorTdi_bid4_yeast_all = sparse.model.matrix(~., data=X_all_dist_freq_di_AorTdi_bid4_yeast_all)
+
+la.model_all_dist_freq_di_AorTdi_bid4.pred_yeast_all = predict(la.model_all_dist_freq_di_AorTdi_bid4, 
+                                                     newx = x_all_dist_freq_di_AorTdi_bid4_yeast_all, 
+                                                     s=la.all_dist_freq_di_AorTdi_bid4_best_lambda)
+
+cor(la.model_all_dist_freq_di_AorTdi_bid4.pred_yeast_all, y_yeast_all, method="pearson")
+# 0.6519727
+mean((la.model_all_dist_freq_di_AorTdi_bid4.pred_yeast_all - y_yeast_all)^2)
+# 0.1267038
+```
+
+We get test prediction correlation of 0.7357136 and MSE of 0.117151 with lasso (1435 nonzero)
+We get test prediction correlation of 0.6666032 and MSE of 0.08718924 on the Random Library
+We get test prediction correlation of 0.5996725 and MSE of 0.1928001 on the ChrV Library
+We get test prediction correlation of 0.6519727 and MSE of 0.1267038 on the Yeast Library
+
+## LightGBM (tree-based) Model
+
+```{r}
+library(lightgbm)
+source("scripts/functions/lgbm-helper-functions.R")
+set.seed(50)
+dat_all_dist_freq_di_AorTdi_bid4.lgb_train_set = dat_all_dist_freq_di_AorTdi_bid4 %>%
+  select(-C0_new)
+dat_all_dist_freq_di_AorTdi_bid4.lgb_train_rules = lgb.convert_with_rules(data = dat_all_dist_freq_di_AorTdi_bid4.lgb_train_set)
+dat_all_dist_freq_di_AorTdi_bid4.lgb_train_data = lgb.Dataset(data = as.matrix(dat_all_dist_freq_di_AorTdi_bid4.lgb_train_rules$data),
+                                                              label = dat_all_dist_freq_di_AorTdi_bid4$C0_new,
+                                                              categorical_feature = handle_categorical(colnames(dat_all_dist_freq_di_AorTdi_bid4.lgb_train_rules$data)))
+dat_all_dist_freq_di_AorTdi_bid4.lgb_test_set = dat_test_all_dist_freq_di_AorTdi_bid4 %>%
+  select(-C0_new)
+dat_all_dist_freq_di_AorTdi_bid4.lgb_test_matrix = as.matrix(lgb.convert_with_rules(data = dat_all_dist_freq_di_AorTdi_bid4.lgb_test_set, rules = dat_all_dist_freq_di_AorTdi_bid4.lgb_train_rules$rules)$data)
+dat_all_dist_freq_di_AorTdi_bid4.lgb_test_data = lgb.Dataset(data = dat_all_dist_freq_di_AorTdi_bid4.lgb_test_matrix,
+                                                             label = dat_test_all_dist_freq_di_AorTdi_bid4$C0_new,
+                                                             categorical_feature = handle_categorical(colnames(dat_all_dist_freq_di_AorTdi_bid4.lgb_test_matrix)))
+dat_all_dist_freq_di_AorTdi_bid4.lgb_obj = lightgbm(data = dat_all_dist_freq_di_AorTdi_bid4.lgb_train_data,
+                                                    params = list(learning_rate = c(0.1),
+                                                                  objective = c("regression"),
+                                                                  min_data_in_leaf = 100,
+                                                                  max_depth = c(5),
+                                                                  num_leaves = c(1000),
+                                                                  lambda_l2 = c(1),
+                                                                  boosting = c("gbdt")),
+                                                    valids = list(valid = dat_all_dist_freq_di_AorTdi_bid4.lgb_test_data),
+                                                    nrounds = 8000,
+                                                    early_stopping_rounds = 50)
+
+dat_all_dist_freq_di_AorTdi_bid4.lgb_train_pred = predict(dat_all_dist_freq_di_AorTdi_bid4.lgb_obj, data = as.matrix(dat_all_dist_freq_di_AorTdi_bid4.lgb_train_rules$data))
+cor(dat_all_dist_freq_di_AorTdi_bid4.lgb_train_pred, y, method="pearson")
+# 0.9766096 (nrounds = 3998)
+
+dat_all_dist_freq_di_AorTdi_bid4.lgb_test_pred = predict(dat_all_dist_freq_di_AorTdi_bid4.lgb_obj, data = dat_all_dist_freq_di_AorTdi_bid4.lgb_test_matrix)
+
+cor(dat_all_dist_freq_di_AorTdi_bid4.lgb_test_pred, y_test, method="pearson")
+# 0.7485781 (nrounds = 3998)
+
+mean((dat_all_dist_freq_di_AorTdi_bid4.lgb_test_pred - y_test)^2)
+# 0.1123651 (nrounds = 3998)
+
+
+dat_all_dist_freq_di_AorTdi_bid4.lgb_random_all_set = dat_random_all_all_dist_freq_di_AorTdi_bid4 %>%
+  select(-C0_new)
+
+dat_all_dist_freq_di_AorTdi_bid4.lgb_random_all_matrix = as.matrix(lgb.convert_with_rules(data = dat_all_dist_freq_di_AorTdi_bid4.lgb_random_all_set, rules = dat_all_dist_freq_di_AorTdi_bid4.lgb_train_rules$rules)$data)
+
+dat_all_dist_freq_di_AorTdi_bid4.lgb_random_all_pred = predict(dat_all_dist_freq_di_AorTdi_bid4.lgb_obj, data = dat_all_dist_freq_di_AorTdi_bid4.lgb_random_all_matrix)
+
+cor(dat_all_dist_freq_di_AorTdi_bid4.lgb_random_all_pred, y_random_all, method="pearson")
+# 0.6204864
+
+mean((dat_all_dist_freq_di_AorTdi_bid4.lgb_random_all_pred - y_random_all)^2)
+# 0.09421146
+
+
+
+dat_all_dist_freq_di_AorTdi_bid4.lgb_chrV_all_set = dat_chrV_all_all_dist_freq_di_AorTdi_bid4 %>%
+  select(-C0_new)
+
+dat_all_dist_freq_di_AorTdi_bid4.lgb_chrV_all_matrix = as.matrix(lgb.convert_with_rules(data = dat_all_dist_freq_di_AorTdi_bid4.lgb_chrV_all_set, rules = dat_all_dist_freq_di_AorTdi_bid4.lgb_train_rules$rules)$data)
+
+dat_all_dist_freq_di_AorTdi_bid4.lgb_chrV_all_pred = predict(dat_all_dist_freq_di_AorTdi_bid4.lgb_obj, data = dat_all_dist_freq_di_AorTdi_bid4.lgb_chrV_all_matrix)
+
+cor(dat_all_dist_freq_di_AorTdi_bid4.lgb_chrV_all_pred, y_chrV_all, method="pearson")
+# 0.5650964
+
+mean((dat_all_dist_freq_di_AorTdi_bid4.lgb_chrV_all_pred - y_chrV_all)^2)
+# 0.2046419
+
+
+
+dat_all_dist_freq_di_AorTdi_bid4.lgb_yeast_all_set = dat_yeast_all_all_dist_freq_di_AorTdi_bid4 %>%
+  select(-C0_new)
+
+dat_all_dist_freq_di_AorTdi_bid4.lgb_yeast_all_matrix = as.matrix(lgb.convert_with_rules(data = dat_all_dist_freq_di_AorTdi_bid4.lgb_yeast_all_set, rules = dat_all_dist_freq_di_AorTdi_bid4.lgb_train_rules$rules)$data)
+
+dat_all_dist_freq_di_AorTdi_bid4.lgb_yeast_all_pred = predict(dat_all_dist_freq_di_AorTdi_bid4.lgb_obj, data = dat_all_dist_freq_di_AorTdi_bid4.lgb_yeast_all_matrix)
+
+cor(dat_all_dist_freq_di_AorTdi_bid4.lgb_yeast_all_pred, y_yeast_all, method="pearson")
+# 0.616296
+
+mean((dat_all_dist_freq_di_AorTdi_bid4.lgb_yeast_all_pred - y_yeast_all)^2)
+# 0.1351694
+```
+
+We get test prediction correlation of 0.7485781 and MSE of 0.1123651
+We get test prediction correlation of 0.6204864 and MSE of 0.09421146 on the Random Library
+We get test prediction correlation of 0.5650964 and MSE of 0.2046419 on the ChrV Library
+We get test prediction correlation of 0.616296 and MSE of 0.1351694 on the Yeast Library
+
+```{r}
+dat_all_dist_freq_di_AorTdi_bid4.feature_importance = as.data.frame(lgb.importance(dat_all_dist_freq_di_AorTdi_bid4.lgb_obj)) %>%
+  mutate(Feature = fct_rev(fct_inorder(Feature))) %>%
+  dplyr::slice(1:50) %>%
+  ggplot(aes(x = Feature, y = Gain)) +
+  geom_col(fill = "dodgerblue") +
+  coord_flip() +
+  theme_bw()
+dat_all_dist_freq_di_AorTdi_bid4.feature_importance
+```
+
+
+
+
+
+
+## LightGBM (tree-based) Model with Optimized Parameters (FIXME)
+
+```{r}
+all_dist_freq_di_AorTdi_bid4_lgb_optimized = readRDS("tuning/all_dist_freq_di_AorTdi_bid4_lgb_optimized.rds")
+all_dist_freq_di_AorTdi_bid4_lgb_optimized$Best_Par
+all_dist_freq_di_AorTdi_bid4_lgb_optimized$Best_Value
+```
+
+
+```{r}
+library(lightgbm)
+source("scripts/functions/lgbm-helper-functions.R")
+set.seed(50)
+dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_train_set = dat_all_dist_freq_di_AorTdi_bid4 %>%
+  select(-C0_new)
+dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_train_rules = lgb.convert_with_rules(data = dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_train_set)
+dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_train_data = lgb.Dataset(data = as.matrix(dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_train_rules$data),
+                                                              label = dat_all_dist_freq_di_AorTdi_bid4$C0_new,
+                                                              categorical_feature = handle_categorical(colnames(dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_train_rules$data)))
+dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_test_set = dat_test_all_dist_freq_di_AorTdi_bid4 %>%
+  select(-C0_new)
+dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_test_matrix = as.matrix(lgb.convert_with_rules(data = dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_test_set, rules = dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_train_rules$rules)$data)
+dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_test_data = lgb.Dataset(data = dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_test_matrix,
+                                                             label = dat_test_all_dist_freq_di_AorTdi_bid4$C0_new,
+                                                             categorical_feature = handle_categorical(colnames(dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_test_matrix)))
+dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_obj = lightgbm(data = dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_train_data,
+                                                    params = list(learning_rate = c(0.02800044),
+                                                                  objective = c("regression"),
+                                                                  min_data_in_leaf = 192,
+                                                                  max_depth = c(8),
+                                                                  num_leaves = c(559),
+                                                                  lambda_l2 = c(6.61367801),
+                                                                  boosting = c("gbdt"),
+                                                                  max_bin = c(253),
+                                                                  feature_fraction = c(0.67535201),
+                                                                  bagging_fraction = c(0.27754067)),
+                                                    valids = list(valid = dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_test_data),
+                                                    nrounds = 8000,
+                                                    early_stopping_rounds = 50)
+
+dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_train_pred = predict(dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_obj, data = as.matrix(dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_train_rules$data))
+cor(dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_train_pred, y, method="pearson")
+# 0.9922539 (nrounds = 8000)
+
+dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_test_pred = predict(dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_obj, data = dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_test_matrix)
+
+cor(dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_test_pred, y_test, method="pearson")
+# 0.7648479 (nrounds = 8000)
+
+mean((dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_test_pred - y_test)^2)
+# 0.1076527 (nrounds = 8000)
+
+
+dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_random_all_set = dat_random_all_all_dist_freq_di_AorTdi_bid4 %>%
+  select(-C0_new)
+
+dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_random_all_matrix = as.matrix(lgb.convert_with_rules(data = dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_random_all_set, rules = dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_train_rules$rules)$data)
+
+dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_random_all_pred = predict(dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_obj, data = dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_random_all_matrix)
+
+cor(dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_random_all_pred, y_random_all, method="pearson")
+# 0.6376061
+
+mean((dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_random_all_pred - y_random_all)^2)
+# 0.09045034
+
+
+
+dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_chrV_all_set = dat_chrV_all_all_dist_freq_di_AorTdi_bid4 %>%
+  select(-C0_new)
+
+dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_chrV_all_matrix = as.matrix(lgb.convert_with_rules(data = dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_chrV_all_set, rules = dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_train_rules$rules)$data)
+
+dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_chrV_all_pred = predict(dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_obj, data = dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_chrV_all_matrix)
+
+cor(dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_chrV_all_pred, y_chrV_all, method="pearson")
+# 0.5748444
+
+mean((dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_chrV_all_pred - y_chrV_all)^2)
+# 0.2011267
+
+
+
+dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_yeast_all_set = dat_yeast_all_all_dist_freq_di_AorTdi_bid4 %>%
+  select(-C0_new)
+
+dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_yeast_all_matrix = as.matrix(lgb.convert_with_rules(data = dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_yeast_all_set, rules = dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_train_rules$rules)$data)
+
+dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_yeast_all_pred = predict(dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_obj, data = dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_yeast_all_matrix)
+
+cor(dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_yeast_all_pred, y_yeast_all, method="pearson")
+# 0.6267982
+
+mean((dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_yeast_all_pred - y_yeast_all)^2)
+# 0.1314079
+```
+
+We get test prediction correlation of 0.7648479 and MSE of 0.1076527
+We get test prediction correlation of 0.6376061 and MSE of 0.09045034 on the Random Library
+We get test prediction correlation of 0.5748444 and MSE of 0.2011267 on the ChrV Library
+We get test prediction correlation of 0.6267982 and MSE of 0.1314079 on the Yeast Library
+
+```{r}
+dat_all_dist_freq_di_AorTdi_bid4_optim.feature_importance = as.data.frame(lgb.importance(dat_all_dist_freq_di_AorTdi_bid4_optim.lgb_obj)) %>%
+  mutate(Feature = fct_rev(fct_inorder(Feature))) %>%
+  dplyr::slice(1:50) %>%
+  ggplot(aes(x = Feature, y = Gain)) +
+  geom_col(fill = "dodgerblue") +
+  coord_flip() +
+  theme_bw()
+dat_all_dist_freq_di_AorTdi_bid4_optim.feature_importance
+```
+
+
+

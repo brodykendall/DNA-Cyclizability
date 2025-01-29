@@ -1,0 +1,1922 @@
+---
+title: "Modeling"
+author: "Brody Kendall"
+date: "3/11/2024"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+dat = readRDS("data/Created/processed_chrV_post_smooth_C0.rds")
+y = dat$DNAcycP_post_smooth_5bp
+# y = dat$ir_lstm_post_smooth_5bp
+# y = dat$C26
+dat_test = readRDS("data/Created/processed_chrV_post_smooth_C0_test.rds")
+y_test = dat_test$DNAcycP_post_smooth_5bp
+# y_test = dat_test$ir_lstm_post_smooth_5bp
+# y_test = dat_test$C26
+```
+
+# Inputs: Position Specific Nucleotides Only
+
+```{r}
+library(Matrix)
+library(glmnet)
+ps1 <- paste0("X", 1:50, "mono")
+```
+
+## No interaction terms
+
+### Simple Linear Model
+
+```{r}
+dat_ps1 = dat %>% select(all_of(ps1), DNAcycP_post_smooth_5bp)
+ps1_lm = lm(DNAcycP_post_smooth_5bp~., data=dat_ps1)
+
+cor(ps1_lm$fitted.values, y)
+# 0.08383103
+
+dat_test_ps1 = dat_test %>% select(all_of(ps1), DNAcycP_post_smooth_5bp)
+ps1_lm_pred = predict(ps1_lm, dat_test_ps1)
+cor(ps1_lm_pred, y_test)
+# 0.05700567
+
+mean((ps1_lm_pred - y_test)^2)
+# 0.2025872
+```
+
+We get test prediction correlation of 0.05700567 and MSE of 0.2025872
+
+
+### LightGBM (tree-based) Model
+
+```{r}
+library(lightgbm)
+source("scripts/functions/lgbm-helper-functions.R")
+set.seed(50)
+dat_ps1.lgb_train_set = dat_ps1 %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_ps1.lgb_train_rules = lgb.convert_with_rules(data = dat_ps1.lgb_train_set)
+dat_ps1.lgb_train_data = lgb.Dataset(data = as.matrix(dat_ps1.lgb_train_rules$data),
+                                     label = dat_ps1$DNAcycP_post_smooth_5bp,
+                                     categorical_feature = handle_categorical(colnames(dat_ps1.lgb_train_rules$data)))
+dat_ps1.lgb_test_set = dat_test_ps1 %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_ps1.lgb_test_matrix = as.matrix(lgb.convert_with_rules(data = dat_ps1.lgb_test_set, rules = dat_ps1.lgb_train_rules$rules)$data)
+dat_ps1.lgb_test_data = lgb.Dataset(data = dat_ps1.lgb_test_matrix,
+                                    label = dat_test_ps1$DNAcycP_post_smooth_5bp,
+                                    categorical_feature = handle_categorical(colnames(dat_ps1.lgb_test_matrix)))
+dat_ps1.lgb_obj = lightgbm(data = dat_ps1.lgb_train_data,
+                           params = list(learning_rate = c(0.1),
+                                         objective = c("regression"),
+                                         min_data_in_leaf = 100,
+                                         max_depth = c(5),
+                                         num_leaves = c(1000),
+                                         lambda_l2 = c(1),
+                                         boosting = c("gbdt")),
+                           valids = list(valid = dat_ps1.lgb_test_data),
+                           nrounds = 4000,
+                           early_stopping_rounds = 50)
+
+dat_ps1.lgb_train_pred = predict(dat_ps1.lgb_obj, data = as.matrix(dat_ps1.lgb_train_rules$data))
+cor(dat_ps1.lgb_train_pred, y, method="pearson")
+# 0.9219826 (nrounds = )
+
+dat_ps1.lgb_test_pred = predict(dat_ps1.lgb_obj, data = dat_ps1.lgb_test_matrix)
+
+cor(dat_ps1.lgb_test_pred, y_test, method="pearson")
+# 0.6679338
+
+mean((dat_ps1.lgb_test_pred - y_test)^2)
+# 0.1131152
+```
+
+We get test prediction correlation of 0.6679338 and MSE of 0.1131152
+
+```{r}
+dat_ps1.feature_importance = as.data.frame(lgb.importance(dat_ps1.lgb_obj)) %>%
+  mutate(Feature = fct_rev(fct_inorder(Feature))) %>%
+  dplyr::slice(1:50) %>%
+  ggplot(aes(x = Feature, y = Gain)) +
+  geom_col(fill = "dodgerblue") +
+  coord_flip() +
+  theme_bw()
+dat_ps1.feature_importance
+```
+
+
+
+# Inputs: Position Specific Dinucleotides
+
+```{r}
+library(Matrix)
+library(glmnet)
+ps2 <- paste0("X", 1:49, "di")
+```
+
+## No interaction terms
+
+### Simple Linear Model
+
+```{r}
+dat_ps2 = dat %>% select(all_of(ps2), DNAcycP_post_smooth_5bp)
+ps2_lm = lm(DNAcycP_post_smooth_5bp~., data=dat_ps2)
+
+cor(ps2_lm$fitted.values, y)
+# 0.3492952
+
+dat_test_ps2 = dat_test %>% select(all_of(ps2), DNAcycP_post_smooth_5bp)
+ps2_lm_pred = predict(ps2_lm, dat_test_ps2)
+cor(ps2_lm_pred, y_test)
+# 0.3280738
+
+mean((ps2_lm_pred - y_test)^2)
+# 0.181327
+```
+
+We get test prediction correlation of 0.3280738 and MSE of 0.181327
+
+### LightGBM (tree-based) Model
+
+```{r}
+library(lightgbm)
+source("scripts/functions/lgbm-helper-functions.R")
+set.seed(50)
+dat_ps2.lgb_train_set = dat_ps2 %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_ps2.lgb_train_rules = lgb.convert_with_rules(data = dat_ps2.lgb_train_set)
+dat_ps2.lgb_train_data = lgb.Dataset(data = as.matrix(dat_ps2.lgb_train_rules$data),
+                                     label = dat_ps2$DNAcycP_post_smooth_5bp,
+                                     categorical_feature = handle_categorical(colnames(dat_ps2.lgb_train_rules$data)))
+dat_ps2.lgb_test_set = dat_test_ps2 %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_ps2.lgb_test_matrix = as.matrix(lgb.convert_with_rules(data = dat_ps2.lgb_test_set, rules = dat_ps2.lgb_train_rules$rules)$data)
+dat_ps2.lgb_test_data = lgb.Dataset(data = dat_ps2.lgb_test_matrix,
+                                    label = dat_test_ps2$DNAcycP_post_smooth_5bp,
+                                    categorical_feature = handle_categorical(colnames(dat_ps2.lgb_test_matrix)))
+dat_ps2.lgb_obj = lightgbm(data = dat_ps2.lgb_train_data,
+                           params = list(learning_rate = c(0.1),
+                                         objective = c("regression"),
+                                         min_data_in_leaf = 100,
+                                         max_depth = c(5),
+                                         num_leaves = c(1000),
+                                         lambda_l2 = c(1),
+                                         boosting = c("gbdt")),
+                           valids = list(valid = dat_ps2.lgb_test_data),
+                           nrounds = 4000,
+                           early_stopping_rounds = 50)
+
+dat_ps2.lgb_train_pred = predict(dat_ps2.lgb_obj, data = as.matrix(dat_ps2.lgb_train_rules$data))
+cor(dat_ps2.lgb_train_pred, y, method="pearson")
+# 0.9972116 (nrounds = )
+
+dat_ps2.lgb_test_pred = predict(dat_ps2.lgb_obj, data = dat_ps2.lgb_test_matrix)
+
+cor(dat_ps2.lgb_test_pred, y_test, method="pearson")
+# 0.727445
+
+mean((dat_ps2.lgb_test_pred - y_test)^2)
+# 0.09828942
+```
+
+We get test prediction correlation of 0.727445 and MSE of 0.09828942
+
+```{r}
+dat_ps2.feature_importance = as.data.frame(lgb.importance(dat_ps2.lgb_obj)) %>%
+  mutate(Feature = fct_rev(fct_inorder(Feature))) %>%
+  dplyr::slice(1:50) %>%
+  ggplot(aes(x = Feature, y = Gain)) +
+  geom_col(fill = "dodgerblue") +
+  coord_flip() +
+  theme_bw()
+dat_ps2.feature_importance
+```
+
+
+
+# Inputs: Counts of nucleotides
+
+```{r}
+nucleotides <- c("A", "C", "G", "T")
+```
+
+```{r}
+dat_mono = dat%>%
+  select(all_of(nucleotides), DNAcycP_post_smooth_5bp)
+
+mono = lm(DNAcycP_post_smooth_5bp~., data=dat_mono)
+cor(mono$fitted.values, dat_mono$DNAcycP_post_smooth_5bp)
+# 0.04043448
+
+dat_test_mono = dat_test%>%
+  select(all_of(nucleotides), DNAcycP_post_smooth_5bp)
+mono_pred = predict(mono, dat_test_mono)
+
+cor(mono_pred, dat_test_mono$DNAcycP_post_smooth_5bp)
+# 0.03252963
+
+mean((mono_pred - dat_test_mono$DNAcycP_post_smooth_5bp)^2)
+# 0.2029064
+```
+
+We get test prediction correlation of 0.03252963 and MSE of 0.2029064
+
+
+# Inputs: Counts of dinucleotides
+
+```{r}
+nucleotides <- c("A", "C", "G", "T")
+dinucleotides <- gtools::permutations(n = 4, r = 2, v = nucleotides,
+                                      repeats.allowed = TRUE) %>%
+  apply(1, paste, collapse = "")
+```
+
+## Simple Linear Model
+
+```{r}
+dat_di = dat%>%
+  select(all_of(dinucleotides), DNAcycP_post_smooth_5bp)
+
+di = lm(DNAcycP_post_smooth_5bp~., data=dat_di)
+cor(di$fitted.values, dat_di$DNAcycP_post_smooth_5bp)
+# 0.3218882
+
+dat_test_di = dat_test%>%
+  select(all_of(dinucleotides), DNAcycP_post_smooth_5bp)
+di_pred = predict(di, dat_test_di)
+
+cor(di_pred, dat_test_di$DNAcycP_post_smooth_5bp)
+# 0.3096887
+
+mean((di_pred - dat_test_di$DNAcycP_post_smooth_5bp)^2)
+# 0.1836516
+```
+
+We get test prediction correlation of 0.3096887 and MSE of 0.1836516
+
+## LightGBM (tree-based) Model
+
+```{r}
+library(lightgbm)
+source("scripts/functions/lgbm-helper-functions.R")
+set.seed(50)
+dat_di.lgb_train_set = dat_di %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_di.lgb_train_rules = lgb.convert_with_rules(data = dat_di.lgb_train_set)
+dat_di.lgb_train_data = lgb.Dataset(data = as.matrix(dat_di.lgb_train_rules$data),
+                                    label = dat_di$DNAcycP_post_smooth_5bp,
+                                    categorical_feature = handle_categorical(colnames(dat_di.lgb_train_rules$data)))
+dat_di.lgb_test_set = dat_test_di %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_di.lgb_test_matrix = as.matrix(lgb.convert_with_rules(data = dat_di.lgb_test_set, rules = dat_di.lgb_train_rules$rules)$data)
+dat_di.lgb_test_data = lgb.Dataset(data = dat_di.lgb_test_matrix,
+                                   label = dat_test_di$DNAcycP_post_smooth_5bp,
+                                   categorical_feature = handle_categorical(colnames(dat_di.lgb_test_matrix)))
+dat_di.lgb_obj = lightgbm(data = dat_di.lgb_train_data,
+                          params = list(learning_rate = c(0.1),
+                                        objective = c("regression"),
+                                        min_data_in_leaf = 100,
+                                        max_depth = c(5),
+                                        num_leaves = c(1000),
+                                        lambda_l2 = c(1),
+                                        boosting = c("gbdt")),
+                          valids = list(valid = dat_di.lgb_test_data),
+                          nrounds = 4000,
+                          early_stopping_rounds = 50)
+
+dat_di.lgb_train_pred = predict(dat_di.lgb_obj, data = as.matrix(dat_di.lgb_train_rules$data))
+cor(dat_di.lgb_train_pred, y, method="pearson")
+# 0.5184857 (nrounds = )
+
+dat_di.lgb_test_pred = predict(dat_di.lgb_obj, data = dat_di.lgb_test_matrix)
+
+cor(dat_di.lgb_test_pred, y_test, method="pearson")
+# 0.376121
+
+mean((dat_di.lgb_test_pred - y_test)^2)
+# 0.1744833
+```
+
+We get test prediction correlation of 0.376121 and MSE of 0.1744833
+
+```{r}
+dat_di.feature_importance = as.data.frame(lgb.importance(dat_di.lgb_obj)) %>%
+  mutate(Feature = fct_rev(fct_inorder(Feature))) %>%
+  dplyr::slice(1:50) %>%
+  ggplot(aes(x = Feature, y = Gain)) +
+  geom_col(fill = "dodgerblue") +
+  coord_flip() +
+  theme_bw()
+dat_di.feature_importance
+```
+
+
+# Inputs: Counts of trinucleotides
+
+```{r}
+nucleotides <- c("A", "C", "G", "T")
+dinucleotides <- gtools::permutations(n = 4, r = 2, v = nucleotides,
+                                      repeats.allowed = TRUE) %>%
+  apply(1, paste, collapse = "")
+trinucleotides <- gtools::permutations(n = 4, r = 3, v = nucleotides,
+                                       repeats.allowed = TRUE) %>%
+  apply(1, paste, collapse = "")
+```
+
+## Simple Linear Model
+
+```{r}
+dat_tri = dat%>%
+  select(all_of(trinucleotides), DNAcycP_post_smooth_5bp)
+
+tri = lm(DNAcycP_post_smooth_5bp~., data=dat_tri)
+cor(tri$fitted.values, dat_tri$DNAcycP_post_smooth_5bp)
+# 0.3523045
+
+dat_test_tri = dat_test%>%
+  select(all_of(trinucleotides), DNAcycP_post_smooth_5bp)
+tri_pred = predict(tri, dat_test_tri)
+
+cor(tri_pred, dat_test_tri$DNAcycP_post_smooth_5bp)
+# 0.3344778
+
+mean((tri_pred - dat_test_tri$DNAcycP_post_smooth_5bp)^2)
+# 0.1804562
+```
+
+We get test prediction correlation of 0.3344778 and MSE of 0.1804562
+
+## LightGBM (tree-based) Model
+
+```{r}
+library(lightgbm)
+source("scripts/functions/lgbm-helper-functions.R")
+set.seed(50)
+dat_tri.lgb_train_set = dat_tri %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_tri.lgb_train_rules = lgb.convert_with_rules(data = dat_tri.lgb_train_set)
+dat_tri.lgb_train_data = lgb.Dataset(data = as.matrix(dat_tri.lgb_train_rules$data),
+                                     label = dat_tri$DNAcycP_post_smooth_5bp,
+                                     categorical_feature = handle_categorical(colnames(dat_tri.lgb_train_rules$data)))
+dat_tri.lgb_test_set = dat_test_tri %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_tri.lgb_test_matrix = as.matrix(lgb.convert_with_rules(data = dat_tri.lgb_test_set, rules = dat_tri.lgb_train_rules$rules)$data)
+dat_tri.lgb_test_data = lgb.Dataset(data = dat_tri.lgb_test_matrix,
+                                    label = dat_test_tri$DNAcycP_post_smooth_5bp,
+                                    categorical_feature = handle_categorical(colnames(dat_tri.lgb_test_matrix)))
+dat_tri.lgb_obj = lightgbm(data = dat_tri.lgb_train_data,
+                           params = list(learning_rate = c(0.1),
+                                         objective = c("regression"),
+                                         min_data_in_leaf = 100,
+                                         max_depth = c(5),
+                                         num_leaves = c(1000),
+                                         lambda_l2 = c(1),
+                                         boosting = c("gbdt")),
+                           valids = list(valid = dat_tri.lgb_test_data),
+                           nrounds = 32000,
+                           early_stopping_rounds = 50)
+
+dat_tri.lgb_train_pred = predict(dat_tri.lgb_obj, data = as.matrix(dat_tri.lgb_train_rules$data))
+cor(dat_tri.lgb_train_pred, y, method="pearson")
+# 0.9835359 (nrounds = 26607)
+
+dat_tri.lgb_test_pred = predict(dat_tri.lgb_obj, data = dat_tri.lgb_test_matrix)
+
+cor(dat_tri.lgb_test_pred, y_test, method="pearson")
+# 0.744012
+
+mean((dat_tri.lgb_test_pred - y_test)^2)
+# 0.09079377
+```
+
+We get test prediction correlation of 0.744012 and MSE of 0.09079377
+
+```{r}
+dat_tri.feature_importance = as.data.frame(lgb.importance(dat_tri.lgb_obj)) %>%
+  mutate(Feature = fct_rev(fct_inorder(Feature))) %>%
+  dplyr::slice(1:50) %>%
+  ggplot(aes(x = Feature, y = Gain)) +
+  geom_col(fill = "dodgerblue") +
+  coord_flip() +
+  theme_bw()
+dat_tri.feature_importance
+```
+
+
+# Inputs: Fourier Amplitude and Phase (10bp) Features Based on A/T
+
+## Simple Linear Model
+
+```{r}
+dat_fourier_mono_10bp = dat %>% select(ps1_fourier_amp, ps1_fourier_phase, DNAcycP_post_smooth_5bp)
+
+fourier_mono_10bp_lm = lm(DNAcycP_post_smooth_5bp~., data=dat_fourier_mono_10bp)
+cor(fourier_mono_10bp_lm$fitted.values, y)
+# 
+
+dat_test_fourier_mono_10bp = dat_test %>% select(ps1_fourier_amp, ps1_fourier_phase, DNAcycP_post_smooth_5bp)
+
+fourier_mono_10bp_pred = predict(fourier_mono_10bp_lm, dat_test_fourier_mono_10bp)
+
+cor(fourier_mono_10bp_pred, y_test)
+# 
+
+mean((fourier_mono_10bp_pred - y_test)^2)
+# 
+```
+
+We get test prediction correlation of  and MSE of 
+
+
+
+# Inputs: Counts of dinucleotides + Fourier Amplitude and Phase (10bp) Features Based on A/T
+
+```{r}
+nucleotides <- c("A", "C", "G", "T")
+dinucleotides <- gtools::permutations(n = 4, r = 2, v = nucleotides,
+                                      repeats.allowed = TRUE) %>%
+  apply(1, paste, collapse = "")
+```
+
+## Simple Linear Model
+
+```{r}
+dat_di2 = dat%>%
+  select(all_of(dinucleotides), ps1_fourier_amp, ps1_fourier_phase, DNAcycP_post_smooth_5bp)
+di2 = lm(DNAcycP_post_smooth_5bp~., data = dat_di2)
+cor(di2$fitted.values, y)
+# 
+
+dat_test_di2 = dat_test%>%
+  select(all_of(dinucleotides), ps1_fourier_amp, ps1_fourier_phase, DNAcycP_post_smooth_5bp)
+di2_pred = predict(di2, dat_test_di2)
+cor(di2_pred, y_test)
+# 
+
+mean((di2_pred - y_test)^2)
+# 
+```
+
+We get test prediction correlation of  and MSE of 
+
+
+# Inputs: Counts of trinucleotides + Fourier Amplitude and Phase (10bp) Features Based on A/T
+
+```{r}
+nucleotides <- c("A", "C", "G", "T")
+dinucleotides <- gtools::permutations(n = 4, r = 2, v = nucleotides,
+                                      repeats.allowed = TRUE) %>%
+  apply(1, paste, collapse = "")
+trinucleotides <- gtools::permutations(n = 4, r = 3, v = nucleotides,
+                                       repeats.allowed = TRUE) %>%
+  apply(1, paste, collapse = "")
+```
+
+## Simple Linear Model
+
+```{r}
+dat_tri2 = dat%>%
+  select(all_of(trinucleotides), ps1_fourier_amp, ps1_fourier_phase, DNAcycP_post_smooth_5bp)
+tri2 = lm(DNAcycP_post_smooth_5bp~., data = dat_tri2)
+cor(tri2$fitted.values, y)
+# 
+
+dat_test_tri2 = dat_test%>%
+  select(all_of(trinucleotides), ps1_fourier_amp, ps1_fourier_phase, DNAcycP_post_smooth_5bp)
+tri2_pred = predict(tri2, dat_test_tri2)
+cor(tri2_pred, y_test)
+# 
+
+mean((tri2_pred - y_test)^2)
+# 
+```
+
+We get test prediction correlation of  and MSE of 
+
+
+## LightGBM (tree-based) Model
+
+```{r}
+library(lightgbm)
+source("scripts/functions/lgbm-helper-functions.R")
+set.seed(50)
+dat_tri2.lgb_train_set = dat_tri2 %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_tri2.lgb_train_rules = lgb.convert_with_rules(data = dat_tri2.lgb_train_set)
+dat_tri2.lgb_train_data = lgb.Dataset(data = as.matrix(dat_tri2.lgb_train_rules$data),
+                                      label = dat_tri2$DNAcycP_post_smooth_5bp,
+                                      categorical_feature = handle_categorical(colnames(dat_tri2.lgb_train_rules$data)))
+dat_tri2.lgb_test_set = dat_test_tri2 %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_tri2.lgb_test_matrix = as.matrix(lgb.convert_with_rules(data = dat_tri2.lgb_test_set, rules = dat_tri2.lgb_train_rules$rules)$data)
+dat_tri2.lgb_test_data = lgb.Dataset(data = dat_tri2.lgb_test_matrix,
+                                     label = dat_test_tri$DNAcycP_post_smooth_5bp,
+                                     categorical_feature = handle_categorical(colnames(dat_tri2.lgb_test_matrix)))
+dat_tri2.lgb_obj = lightgbm(data = dat_tri2.lgb_train_data,
+                            params = list(learning_rate = c(0.1),
+                                          objective = c("regression"),
+                                          min_data_in_leaf = 100,
+                                          max_depth = c(5),
+                                          num_leaves = c(1000),
+                                          lambda_l2 = c(1),
+                                          boosting = c("gbdt")),
+                            valids = list(valid = dat_tri2.lgb_test_data),
+                            nrounds = 32000,
+                            early_stopping_rounds = 50)
+
+dat_tri2.lgb_train_pred = predict(dat_tri2.lgb_obj, data = as.matrix(dat_tri2.lgb_train_rules$data))
+cor(dat_tri2.lgb_train_pred, y, method="pearson")
+#  (nrounds = )
+
+dat_tri2.lgb_test_pred = predict(dat_tri2.lgb_obj, data = dat_tri2.lgb_test_matrix)
+
+cor(dat_tri2.lgb_test_pred, y_test, method="pearson")
+# 
+
+mean((dat_tri2.lgb_test_pred - y_test)^2)
+# 
+```
+
+We get test prediction correlation of  and MSE of 
+
+```{r}
+dat_tri2.feature_importance = as.data.frame(lgb.importance(dat_tri2.lgb_obj)) %>%
+  mutate(Feature = fct_rev(fct_inorder(Feature))) %>%
+  dplyr::slice(1:50) %>%
+  ggplot(aes(x = Feature, y = Gain)) +
+  geom_col(fill = "dodgerblue") +
+  coord_flip() +
+  theme_bw()
+dat_tri2.feature_importance
+```
+
+
+
+
+# Inputs: Position Specific Nucleotides and Di/Trinucleotides + Counts of nucleotides and di/trinucleotides + GC Count + Fourier Amplitude and Phase (10bp) Features Based on A/T
+
+```{r}
+ps1 <- paste0("X", 1:50, "mono")
+ps2 <- paste0("X", 1:49, "di")
+ps3 <- paste0("X", 1:48, "tri")
+
+nucleotides <- c("A", "C", "G", "T")
+dinucleotides <- gtools::permutations(n = 4, r = 2, v = nucleotides,
+                                      repeats.allowed = TRUE) %>%
+  apply(1, paste, collapse = "")
+trinucleotides <- gtools::permutations(n = 4, r = 3, v = nucleotides,
+                                       repeats.allowed = TRUE) %>%
+  apply(1, paste, collapse = "")
+```
+
+## Simple Linear Model
+
+```{r}
+dat_all_inc = dat%>%
+  select(all_of(ps1), all_of(ps2), all_of(ps3),
+         all_of(nucleotides), all_of(dinucleotides), all_of(trinucleotides), 
+         gc_count, ps1_fourier_amp, ps1_fourier_phase, DNAcycP_post_smooth_5bp)
+all_inc = lm(DNAcycP_post_smooth_5bp~., data = dat_all_inc)
+cor(all_inc$fitted.values, y)
+# 
+
+dat_test_all_inc = dat_test%>%
+  select(all_of(ps1), all_of(ps2), all_of(ps3),
+         all_of(nucleotides), all_of(dinucleotides), all_of(trinucleotides), 
+         gc_count, ps1_fourier_amp, ps1_fourier_phase, DNAcycP_post_smooth_5bp)
+all_inc_pred = predict(all_inc, dat_test_all_inc)
+cor(all_inc_pred, y_test)
+# 
+
+mean((all_inc_pred - y_test)^2)
+# 
+```
+
+We get test prediction correlation of  and MSE of 
+
+
+## LightGBM (tree-based) Model
+
+```{r}
+library(lightgbm)
+source("scripts/functions/lgbm-helper-functions.R")
+set.seed(50)
+dat_all_inc.lgb_train_set = dat_all_inc %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_all_inc.lgb_train_rules = lgb.convert_with_rules(data = dat_all_inc.lgb_train_set)
+dat_all_inc.lgb_train_data = lgb.Dataset(data = as.matrix(dat_all_inc.lgb_train_rules$data),
+                                         label = dat_all_inc$DNAcycP_post_smooth_5bp,
+                                         categorical_feature = handle_categorical(colnames(dat_all_inc.lgb_train_rules$data)))
+dat_all_inc.lgb_test_set = dat_test_all_inc %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_all_inc.lgb_test_matrix = as.matrix(lgb.convert_with_rules(data = dat_all_inc.lgb_test_set, rules = dat_all_inc.lgb_train_rules$rules)$data)
+dat_all_inc.lgb_test_data = lgb.Dataset(data = dat_all_inc.lgb_test_matrix,
+                                        label = dat_test_all_inc$DNAcycP_post_smooth_5bp,
+                                        categorical_feature = handle_categorical(colnames(dat_all_inc.lgb_test_matrix)))
+dat_all_inc.lgb_obj = lightgbm(data = dat_all_inc.lgb_train_data,
+                               params = list(learning_rate = c(0.1),
+                                             objective = c("regression"),
+                                             min_data_in_leaf = 100,
+                                             max_depth = c(5),
+                                             num_leaves = c(1000),
+                                             lambda_l2 = c(1),
+                                             boosting = c("gbdt")),
+                               valids = list(valid = dat_all_inc.lgb_test_data),
+                               nrounds = 32000,
+                               early_stopping_rounds = 50)
+
+dat_all_inc.lgb_train_pred = predict(dat_all_inc.lgb_obj, data = as.matrix(dat_all_inc.lgb_train_rules$data))
+cor(dat_all_inc.lgb_train_pred, y, method="pearson")
+#  (nrounds = )
+
+dat_all_inc.lgb_test_pred = predict(dat_all_inc.lgb_obj, data = dat_all_inc.lgb_test_matrix)
+
+cor(dat_all_inc.lgb_test_pred, y_test, method="pearson")
+# 
+
+mean((dat_all_inc.lgb_test_pred - y_test)^2)
+# 
+```
+
+We get test prediction correlation of  and MSE of 
+
+```{r}
+dat_all_inc.feature_importance = as.data.frame(lgb.importance(dat_all_inc.lgb_obj)) %>%
+  mutate(Feature = fct_rev(fct_inorder(Feature))) %>%
+  dplyr::slice(1:50) %>%
+  ggplot(aes(x = Feature, y = Gain)) +
+  geom_col(fill = "dodgerblue") +
+  coord_flip() +
+  theme_bw()
+dat_all_inc.feature_importance
+```
+
+
+
+# Inputs: Fourier Amp/Phase Based on Single Nucleotides Only
+
+```{r}
+Xone_nuc_fourier_mag = readRDS("data/Created/chrV_post_smooth_C0_Xone_nuc_fourier_mag.rds")
+Xone_nuc_fourier_phase = readRDS("data/Created/chrV_post_smooth_C0_Xone_nuc_fourier_phase.rds")
+
+Xone_nuc_fourier_mag_test = readRDS("data/Created/chrV_post_smooth_C0_Xone_nuc_fourier_mag_test.rds")
+Xone_nuc_fourier_phase_test = readRDS("data/Created/chrV_post_smooth_C0_Xone_nuc_fourier_phase_test.rds")
+```
+
+## Simple Linear Model
+
+```{r}
+dat_fourier1 = cbind(Xone_nuc_fourier_mag, Xone_nuc_fourier_phase, 
+                     dat %>% select(DNAcycP_post_smooth_5bp))
+
+fourier1_lm = lm(DNAcycP_post_smooth_5bp~., data=dat_fourier1)
+cor(fourier1_lm$fitted.values, y)
+# 0.2975783
+
+dat_test_fourier1 = cbind(Xone_nuc_fourier_mag_test, Xone_nuc_fourier_phase_test, 
+                          dat_test %>% select(DNAcycP_post_smooth_5bp))
+
+fourier1_pred = predict(fourier1_lm, dat_test_fourier1)
+
+cor(fourier1_pred, y_test)
+# 0.3028856
+
+mean((fourier1_pred - y_test)^2)
+# 0.1844783
+```
+
+We get test prediction correlation of 0.3028856 and MSE of 0.1844783
+
+## LightGBM (tree-based) Model
+
+```{r}
+library(lightgbm)
+source("scripts/functions/lgbm-helper-functions.R")
+set.seed(50)
+dat_fourier1.lgb_train_set = dat_fourier1 %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_fourier1.lgb_train_rules = lgb.convert_with_rules(data = dat_fourier1.lgb_train_set)
+dat_fourier1.lgb_train_data = lgb.Dataset(data = as.matrix(dat_fourier1.lgb_train_rules$data),
+                                          label = dat_fourier1$DNAcycP_post_smooth_5bp,
+                                          categorical_feature = handle_categorical(colnames(dat_fourier1.lgb_train_rules$data)))
+dat_fourier1.lgb_test_set = dat_test_fourier1 %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_fourier1.lgb_test_matrix = as.matrix(lgb.convert_with_rules(data = dat_fourier1.lgb_test_set, rules = dat_fourier1.lgb_train_rules$rules)$data)
+dat_fourier1.lgb_test_data = lgb.Dataset(data = dat_fourier1.lgb_test_matrix,
+                                         label = dat_test_fourier1$DNAcycP_post_smooth_5bp,
+                                         categorical_feature = handle_categorical(colnames(dat_fourier1.lgb_test_matrix)))
+dat_fourier1.lgb_obj = lightgbm(data = dat_fourier1.lgb_train_data,
+                                params = list(learning_rate = c(0.1),
+                                              objective = c("regression"),
+                                              min_data_in_leaf = 100,
+                                              max_depth = c(5),
+                                              num_leaves = c(1000),
+                                              lambda_l2 = c(1),
+                                              boosting = c("gbdt")),
+                                valids = list(valid = dat_fourier1.lgb_test_data),
+                                nrounds = 32000,
+                                early_stopping_rounds = 50)
+
+dat_fourier1.lgb_train_pred = predict(dat_fourier1.lgb_obj, data = as.matrix(dat_fourier1.lgb_train_rules$data))
+cor(dat_fourier1.lgb_train_pred, y, method="pearson")
+# 0.7726157 (nrounds = 868)
+
+dat_fourier1.lgb_test_pred = predict(dat_fourier1.lgb_obj, data = dat_fourier1.lgb_test_matrix)
+
+cor(dat_fourier1.lgb_test_pred, y_test, method="pearson")
+# 0.5495599
+
+mean((dat_fourier1.lgb_test_pred - y_test)^2)
+# 0.1418222
+```
+
+We get test prediction correlation of 0.5495599 and MSE of 0.1418222
+
+```{r}
+dat_fourier1.feature_importance = as.data.frame(lgb.importance(dat_fourier1.lgb_obj)) %>%
+  mutate(Feature = fct_rev(fct_inorder(Feature))) %>%
+  dplyr::slice(1:50) %>%
+  ggplot(aes(x = Feature, y = Gain)) +
+  geom_col(fill = "dodgerblue") +
+  coord_flip() +
+  theme_bw()
+dat_fourier1.feature_importance
+```
+
+
+# Inputs: Amp/Phase of Differences Between Fourier Based on Single Nucleotides Only
+
+```{r}
+Xone_nucminusnuc_fourier_mag = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucminusnuc_fourier_mag.rds")
+Xone_nucminusnuc_fourier_phase = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucminusnuc_fourier_phase.rds")
+
+Xone_nucminusnuc_fourier_mag_test = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucminusnuc_fourier_mag_test.rds")
+Xone_nucminusnuc_fourier_phase_test = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucminusnuc_fourier_phase_test.rds")
+```
+
+## Simple Linear Model
+
+```{r}
+dat_fourier2 = cbind(Xone_nucminusnuc_fourier_mag, Xone_nucminusnuc_fourier_phase, 
+                     dat %>% select(DNAcycP_post_smooth_5bp))
+
+fourier2_lm = lm(DNAcycP_post_smooth_5bp~., data=dat_fourier2)
+cor(fourier2_lm$fitted.values, y)
+# 0.4438849
+
+dat_test_fourier2 = cbind(Xone_nucminusnuc_fourier_mag_test, Xone_nucminusnuc_fourier_phase_test, 
+                          dat_test %>% select(DNAcycP_post_smooth_5bp))
+
+fourier2_pred = predict(fourier2_lm, dat_test_fourier2)
+
+cor(fourier2_pred, y_test)
+# 0.4457344
+
+mean((fourier2_pred - y_test)^2)
+# 0.1627671
+```
+
+We get test prediction correlation of 0.4457344 and MSE of 0.1627671
+
+## LightGBM (tree-based) Model
+
+```{r}
+library(lightgbm)
+source("scripts/functions/lgbm-helper-functions.R")
+set.seed(50)
+dat_fourier2.lgb_train_set = dat_fourier2 %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_fourier2.lgb_train_rules = lgb.convert_with_rules(data = dat_fourier2.lgb_train_set)
+dat_fourier2.lgb_train_data = lgb.Dataset(data = as.matrix(dat_fourier2.lgb_train_rules$data),
+                                          label = dat_fourier2$DNAcycP_post_smooth_5bp,
+                                          categorical_feature = handle_categorical(colnames(dat_fourier2.lgb_train_rules$data)))
+dat_fourier2.lgb_test_set = dat_test_fourier2 %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_fourier2.lgb_test_matrix = as.matrix(lgb.convert_with_rules(data = dat_fourier2.lgb_test_set, rules = dat_fourier2.lgb_train_rules$rules)$data)
+dat_fourier2.lgb_test_data = lgb.Dataset(data = dat_fourier2.lgb_test_matrix,
+                                         label = dat_test_fourier2$DNAcycP_post_smooth_5bp,
+                                         categorical_feature = handle_categorical(colnames(dat_fourier2.lgb_test_matrix)))
+dat_fourier2.lgb_obj = lightgbm(data = dat_fourier2.lgb_train_data,
+                                params = list(learning_rate = c(0.1),
+                                              objective = c("regression"),
+                                              min_data_in_leaf = 100,
+                                              max_depth = c(5),
+                                              num_leaves = c(1000),
+                                              lambda_l2 = c(1),
+                                              boosting = c("gbdt")),
+                                valids = list(valid = dat_fourier2.lgb_test_data),
+                                nrounds = 32000,
+                                early_stopping_rounds = 50)
+
+dat_fourier2.lgb_train_pred = predict(dat_fourier2.lgb_obj, data = as.matrix(dat_fourier2.lgb_train_rules$data))
+cor(dat_fourier2.lgb_train_pred, y, method="pearson")
+# 0.8182624 (nrounds = 1079)
+
+dat_fourier2.lgb_test_pred = predict(dat_fourier2.lgb_obj, data = dat_fourier2.lgb_test_matrix)
+
+cor(dat_fourier2.lgb_test_pred, y_test, method="pearson")
+# 0.5762739
+
+mean((dat_fourier2.lgb_test_pred - y_test)^2)
+# 0.1356638
+```
+
+We get test prediction correlation of 0.5762739 and MSE of 0.1356638
+
+```{r}
+dat_fourier2.feature_importance = as.data.frame(lgb.importance(dat_fourier2.lgb_obj)) %>%
+  mutate(Feature = fct_rev(fct_inorder(Feature))) %>%
+  dplyr::slice(1:50) %>%
+  ggplot(aes(x = Feature, y = Gain)) +
+  geom_col(fill = "dodgerblue") +
+  coord_flip() +
+  theme_bw()
+dat_fourier2.feature_importance
+```
+
+
+
+
+# Inputs: Fourier Amp/Phase Based on Single Nucleotides + Amp/Phase of Differences Between Fourier Based on Single Nucleotides Only
+```{r}
+Xone_nuc_fourier_mag = readRDS("data/Created/chrV_post_smooth_C0_Xone_nuc_fourier_mag.rds")
+Xone_nuc_fourier_phase = readRDS("data/Created/chrV_post_smooth_C0_Xone_nuc_fourier_phase.rds")
+Xone_nucminusnuc_fourier_mag = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucminusnuc_fourier_mag.rds")
+Xone_nucminusnuc_fourier_phase = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucminusnuc_fourier_phase.rds")
+
+Xone_nuc_fourier_mag_test = readRDS("data/Created/chrV_post_smooth_C0_Xone_nuc_fourier_mag_test.rds")
+Xone_nuc_fourier_phase_test = readRDS("data/Created/chrV_post_smooth_C0_Xone_nuc_fourier_phase_test.rds")
+Xone_nucminusnuc_fourier_mag_test = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucminusnuc_fourier_mag_test.rds")
+Xone_nucminusnuc_fourier_phase_test = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucminusnuc_fourier_phase_test.rds")
+```
+
+## Simple Linear Model
+
+```{r}
+dat_fourier3 = cbind(Xone_nuc_fourier_mag, Xone_nuc_fourier_phase,
+                     Xone_nucminusnuc_fourier_mag, Xone_nucminusnuc_fourier_phase,
+                     dat %>% select(DNAcycP_post_smooth_5bp))
+
+fourier3_lm = lm(DNAcycP_post_smooth_5bp~., data=dat_fourier3)
+cor(fourier3_lm$fitted.values, y)
+# 0.4538306
+
+dat_test_fourier3 = cbind(Xone_nuc_fourier_mag_test, Xone_nuc_fourier_phase_test,
+                          Xone_nucminusnuc_fourier_mag_test, Xone_nucminusnuc_fourier_phase_test,
+                          dat_test %>% select(DNAcycP_post_smooth_5bp))
+
+fourier3_pred = predict(fourier3_lm, dat_test_fourier3)
+
+cor(fourier3_pred, y_test)
+# 0.4571884
+
+mean((fourier3_pred - y_test)^2)
+# 0.160655
+```
+
+We get test prediction correlation of 0.4571884 and MSE of 0.160655
+
+## LightGBM (tree-based) Model
+
+```{r}
+library(lightgbm)
+source("scripts/functions/lgbm-helper-functions.R")
+set.seed(50)
+dat_fourier3.lgb_train_set = dat_fourier3 %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_fourier3.lgb_train_rules = lgb.convert_with_rules(data = dat_fourier3.lgb_train_set)
+dat_fourier3.lgb_train_data = lgb.Dataset(data = as.matrix(dat_fourier3.lgb_train_rules$data),
+                                          label = dat_fourier3$DNAcycP_post_smooth_5bp,
+                                          categorical_feature = handle_categorical(colnames(dat_fourier3.lgb_train_rules$data)))
+dat_fourier3.lgb_test_set = dat_test_fourier3 %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_fourier3.lgb_test_matrix = as.matrix(lgb.convert_with_rules(data = dat_fourier3.lgb_test_set, rules = dat_fourier3.lgb_train_rules$rules)$data)
+dat_fourier3.lgb_test_data = lgb.Dataset(data = dat_fourier3.lgb_test_matrix,
+                                         label = dat_test_fourier3$DNAcycP_post_smooth_5bp,
+                                         categorical_feature = handle_categorical(colnames(dat_fourier3.lgb_test_matrix)))
+dat_fourier3.lgb_obj = lightgbm(data = dat_fourier3.lgb_train_data,
+                                params = list(learning_rate = c(0.1),
+                                              objective = c("regression"),
+                                              min_data_in_leaf = 100,
+                                              max_depth = c(5),
+                                              num_leaves = c(1000),
+                                              lambda_l2 = c(1),
+                                              boosting = c("gbdt")),
+                                valids = list(valid = dat_fourier3.lgb_test_data),
+                                nrounds = 32000,
+                                early_stopping_rounds = 50)
+
+dat_fourier3.lgb_train_pred = predict(dat_fourier3.lgb_obj, data = as.matrix(dat_fourier3.lgb_train_rules$data))
+cor(dat_fourier3.lgb_train_pred, y, method="pearson")
+# 0.8830444 (nrounds = )
+
+dat_fourier3.lgb_test_pred = predict(dat_fourier3.lgb_obj, data = dat_fourier3.lgb_test_matrix)
+
+cor(dat_fourier3.lgb_test_pred, y_test, method="pearson")
+# 0.5876523
+
+mean((dat_fourier3.lgb_test_pred - y_test)^2)
+# 0.132982
+```
+
+We get test prediction correlation of 0.5876523 and MSE of 0.132982
+
+```{r}
+dat_fourier3.feature_importance = as.data.frame(lgb.importance(dat_fourier3.lgb_obj)) %>%
+  mutate(Feature = fct_rev(fct_inorder(Feature))) %>%
+  dplyr::slice(1:50) %>%
+  ggplot(aes(x = Feature, y = Gain)) +
+  geom_col(fill = "dodgerblue") +
+  coord_flip() +
+  theme_bw()
+dat_fourier3.feature_importance
+```
+
+
+
+
+
+# Inputs: Fourier Amp/Phase Based on Pairs of Single Nucleotides Only
+
+```{r}
+Xone_nucornuc_fourier_mag = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucornuc_fourier_mag.rds")
+Xone_nucornuc_fourier_phase = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucornuc_fourier_phase.rds")
+
+Xone_nucornuc_fourier_mag_test = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucornuc_fourier_mag_test.rds")
+Xone_nucornuc_fourier_phase_test = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucornuc_fourier_phase_test.rds")
+```
+
+## Simple Linear Model
+
+```{r}
+dat_fourier4 = cbind(Xone_nucornuc_fourier_mag, Xone_nucornuc_fourier_phase, 
+                     dat %>% select(DNAcycP_post_smooth_5bp))
+
+fourier4_lm = lm(DNAcycP_post_smooth_5bp~., data=dat_fourier4)
+cor(fourier4_lm$fitted.values, y)
+# 0.4575293
+
+dat_test_fourier4 = cbind(Xone_nucornuc_fourier_mag_test, Xone_nucornuc_fourier_phase_test, 
+                          dat_test %>% select(DNAcycP_post_smooth_5bp))
+
+fourier4_pred = predict(fourier4_lm, dat_test_fourier4)
+
+cor(fourier4_pred, y_test)
+# 0.4640322
+
+mean((fourier4_pred - y_test)^2)
+# 0.1593639
+```
+
+We get test prediction correlation of 0.4640322 and MSE of 0.1593639
+
+## LightGBM (tree-based) Model
+
+```{r}
+library(lightgbm)
+source("scripts/functions/lgbm-helper-functions.R")
+set.seed(50)
+dat_fourier4.lgb_train_set = dat_fourier4 %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_fourier4.lgb_train_rules = lgb.convert_with_rules(data = dat_fourier4.lgb_train_set)
+dat_fourier4.lgb_train_data = lgb.Dataset(data = as.matrix(dat_fourier4.lgb_train_rules$data),
+                                          label = dat_fourier4$DNAcycP_post_smooth_5bp,
+                                          categorical_feature = handle_categorical(colnames(dat_fourier4.lgb_train_rules$data)))
+dat_fourier4.lgb_test_set = dat_test_fourier4 %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_fourier4.lgb_test_matrix = as.matrix(lgb.convert_with_rules(data = dat_fourier4.lgb_test_set, rules = dat_fourier4.lgb_train_rules$rules)$data)
+dat_fourier4.lgb_test_data = lgb.Dataset(data = dat_fourier4.lgb_test_matrix,
+                                         label = dat_test_fourier4$DNAcycP_post_smooth_5bp,
+                                         categorical_feature = handle_categorical(colnames(dat_fourier4.lgb_test_matrix)))
+dat_fourier4.lgb_obj = lightgbm(data = dat_fourier4.lgb_train_data,
+                                params = list(learning_rate = c(0.1),
+                                              objective = c("regression"),
+                                              min_data_in_leaf = 100,
+                                              max_depth = c(5),
+                                              num_leaves = c(1000),
+                                              lambda_l2 = c(1),
+                                              boosting = c("gbdt")),
+                                valids = list(valid = dat_fourier4.lgb_test_data),
+                                nrounds = 32000,
+                                early_stopping_rounds = 50)
+
+dat_fourier4.lgb_train_pred = predict(dat_fourier4.lgb_obj, data = as.matrix(dat_fourier4.lgb_train_rules$data))
+cor(dat_fourier4.lgb_train_pred, y, method="pearson")
+# 0.7465609 (nrounds = 689)
+
+dat_fourier4.lgb_test_pred = predict(dat_fourier4.lgb_obj, data = dat_fourier4.lgb_test_matrix)
+
+cor(dat_fourier4.lgb_test_pred, y_test, method="pearson")
+# 0.583835
+
+mean((dat_fourier4.lgb_test_pred - y_test)^2)
+# 0.1339646
+```
+
+We get test prediction correlation of 0.583835 and MSE of 0.1339646
+
+```{r}
+dat_fourier4.feature_importance = as.data.frame(lgb.importance(dat_fourier4.lgb_obj)) %>%
+  mutate(Feature = fct_rev(fct_inorder(Feature))) %>%
+  dplyr::slice(1:50) %>%
+  ggplot(aes(x = Feature, y = Gain)) +
+  geom_col(fill = "dodgerblue") +
+  coord_flip() +
+  theme_bw()
+dat_fourier4.feature_importance
+```
+
+
+
+# Inputs: Fourier Amp/Phase Based on Single Nucleotides + Amp/Phase of Differences Between Fourier Based on Single Nucleotides Only + Fourier Amp/Phase Based on Pairs of Single Nucleotides
+
+```{r}
+Xone_nuc_fourier_mag = readRDS("data/Created/chrV_post_smooth_C0_Xone_nuc_fourier_mag.rds")
+Xone_nuc_fourier_phase = readRDS("data/Created/chrV_post_smooth_C0_Xone_nuc_fourier_phase.rds")
+Xone_nucminusnuc_fourier_mag = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucminusnuc_fourier_mag.rds")
+Xone_nucminusnuc_fourier_phase = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucminusnuc_fourier_phase.rds")
+Xone_nucornuc_fourier_mag = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucornuc_fourier_mag.rds")
+Xone_nucornuc_fourier_phase = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucornuc_fourier_phase.rds")
+
+Xone_nuc_fourier_mag_test = readRDS("data/Created/chrV_post_smooth_C0_Xone_nuc_fourier_mag_test.rds")
+Xone_nuc_fourier_phase_test = readRDS("data/Created/chrV_post_smooth_C0_Xone_nuc_fourier_phase_test.rds")
+Xone_nucminusnuc_fourier_mag_test = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucminusnuc_fourier_mag_test.rds")
+Xone_nucminusnuc_fourier_phase_test = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucminusnuc_fourier_phase_test.rds")
+Xone_nucornuc_fourier_mag_test = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucornuc_fourier_mag_test.rds")
+Xone_nucornuc_fourier_phase_test = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucornuc_fourier_phase_test.rds")
+```
+
+## Simple Linear Model
+
+```{r}
+dat_fourier5 = cbind(Xone_nuc_fourier_mag, Xone_nuc_fourier_phase, 
+                     Xone_nucminusnuc_fourier_mag, Xone_nucminusnuc_fourier_phase,
+                     Xone_nucornuc_fourier_mag, Xone_nucornuc_fourier_phase,
+                     dat %>% select(DNAcycP_post_smooth_5bp))
+
+fourier5_lm = lm(DNAcycP_post_smooth_5bp~., data=dat_fourier5)
+cor(fourier5_lm$fitted.values, y)
+# 0.4764349
+
+dat_test_fourier5 = cbind(Xone_nuc_fourier_mag_test, Xone_nuc_fourier_phase_test, 
+                          Xone_nucminusnuc_fourier_mag_test, Xone_nucminusnuc_fourier_phase_test,
+                          Xone_nucornuc_fourier_mag_test, Xone_nucornuc_fourier_phase_test,
+                          dat_test %>% select(DNAcycP_post_smooth_5bp))
+
+fourier5_pred = predict(fourier5_lm, dat_test_fourier5)
+
+cor(fourier5_pred, y_test)
+# 0.4793369
+
+mean((fourier5_pred - y_test)^2)
+# 0.1564312
+```
+
+We get test prediction correlation of 0.4793369 and MSE of 0.1564312
+
+## LightGBM (tree-based) Model
+
+```{r}
+library(lightgbm)
+source("scripts/functions/lgbm-helper-functions.R")
+set.seed(50)
+dat_fourier5.lgb_train_set = dat_fourier5 %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_fourier5.lgb_train_rules = lgb.convert_with_rules(data = dat_fourier5.lgb_train_set)
+dat_fourier5.lgb_train_data = lgb.Dataset(data = as.matrix(dat_fourier5.lgb_train_rules$data),
+                                          label = dat_fourier5$DNAcycP_post_smooth_5bp,
+                                          categorical_feature = handle_categorical(colnames(dat_fourier5.lgb_train_rules$data)))
+dat_fourier5.lgb_test_set = dat_test_fourier5 %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_fourier5.lgb_test_matrix = as.matrix(lgb.convert_with_rules(data = dat_fourier5.lgb_test_set, rules = dat_fourier5.lgb_train_rules$rules)$data)
+dat_fourier5.lgb_test_data = lgb.Dataset(data = dat_fourier5.lgb_test_matrix,
+                                         label = dat_test_fourier5$DNAcycP_post_smooth_5bp,
+                                         categorical_feature = handle_categorical(colnames(dat_fourier5.lgb_test_matrix)))
+dat_fourier5.lgb_obj = lightgbm(data = dat_fourier5.lgb_train_data,
+                                params = list(learning_rate = c(0.1),
+                                              objective = c("regression"),
+                                              min_data_in_leaf = 100,
+                                              max_depth = c(5),
+                                              num_leaves = c(1000),
+                                              lambda_l2 = c(1),
+                                              boosting = c("gbdt")),
+                                valids = list(valid = dat_fourier5.lgb_test_data),
+                                nrounds = 32000,
+                                early_stopping_rounds = 50)
+
+dat_fourier5.lgb_train_pred = predict(dat_fourier5.lgb_obj, data = as.matrix(dat_fourier5.lgb_train_rules$data))
+cor(dat_fourier5.lgb_train_pred, y, method="pearson")
+# 0.8693369 (nrounds = )
+
+dat_fourier5.lgb_test_pred = predict(dat_fourier5.lgb_obj, data = dat_fourier5.lgb_test_matrix)
+
+cor(dat_fourier5.lgb_test_pred, y_test, method="pearson")
+# 0.6040962
+
+mean((dat_fourier5.lgb_test_pred - y_test)^2)
+# 0.1289853
+```
+
+We get test prediction correlation of 0.6040962 and MSE of 0.1289853
+
+```{r}
+dat_fourier5.feature_importance = as.data.frame(lgb.importance(dat_fourier5.lgb_obj)) %>%
+  mutate(Feature = fct_rev(fct_inorder(Feature))) %>%
+  dplyr::slice(1:50) %>%
+  ggplot(aes(x = Feature, y = Gain)) +
+  geom_col(fill = "dodgerblue") +
+  coord_flip() +
+  theme_bw()
+dat_fourier5.feature_importance
+```
+
+
+
+# Inputs: Fourier Amp/Phase Based on Single Dinucleotides Only
+
+```{r}
+Xtwo_di_fourier_mag = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_di_fourier_mag.rds")
+Xtwo_di_fourier_phase = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_di_fourier_phase.rds")
+
+Xtwo_di_fourier_mag_test = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_di_fourier_mag_test.rds")
+Xtwo_di_fourier_phase_test = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_di_fourier_phase_test.rds")
+```
+
+## Simple Linear Model
+
+```{r}
+dat_fourier6 = cbind(Xtwo_di_fourier_mag, Xtwo_di_fourier_phase, 
+                     dat %>% select(DNAcycP_post_smooth_5bp))
+
+fourier6_lm = lm(DNAcycP_post_smooth_5bp~., data=dat_fourier6)
+cor(fourier6_lm$fitted.values, y)
+# 0.4173862
+
+dat_test_fourier6 = cbind(Xtwo_di_fourier_mag_test, Xtwo_di_fourier_phase_test, 
+                          dat_test %>% select(DNAcycP_post_smooth_5bp))
+
+fourier6_pred = predict(fourier6_lm, dat_test_fourier6)
+
+cor(fourier6_pred, y_test)
+# 0.4106185
+
+mean((fourier6_pred - y_test)^2)
+# 0.1688629
+```
+
+We get test prediction correlation of 0.4106185 and MSE of 0.1688629
+
+## LightGBM (tree-based) Model
+
+```{r}
+library(lightgbm)
+source("scripts/functions/lgbm-helper-functions.R")
+set.seed(50)
+dat_fourier6.lgb_train_set = dat_fourier6 %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_fourier6.lgb_train_rules = lgb.convert_with_rules(data = dat_fourier6.lgb_train_set)
+dat_fourier6.lgb_train_data = lgb.Dataset(data = as.matrix(dat_fourier6.lgb_train_rules$data),
+                                          label = dat_fourier6$DNAcycP_post_smooth_5bp,
+                                          categorical_feature = handle_categorical(colnames(dat_fourier6.lgb_train_rules$data)))
+dat_fourier6.lgb_test_set = dat_test_fourier6 %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_fourier6.lgb_test_matrix = as.matrix(lgb.convert_with_rules(data = dat_fourier6.lgb_test_set, rules = dat_fourier6.lgb_train_rules$rules)$data)
+dat_fourier6.lgb_test_data = lgb.Dataset(data = dat_fourier6.lgb_test_matrix,
+                                         label = dat_test_fourier6$DNAcycP_post_smooth_5bp,
+                                         categorical_feature = handle_categorical(colnames(dat_fourier6.lgb_test_matrix)))
+dat_fourier6.lgb_obj = lightgbm(data = dat_fourier6.lgb_train_data,
+                                params = list(learning_rate = c(0.1),
+                                              objective = c("regression"),
+                                              min_data_in_leaf = 100,
+                                              max_depth = c(5),
+                                              num_leaves = c(1000),
+                                              lambda_l2 = c(1),
+                                              boosting = c("gbdt")),
+                                valids = list(valid = dat_fourier6.lgb_test_data),
+                                nrounds = 32000,
+                                early_stopping_rounds = 50)
+
+dat_fourier6.lgb_train_pred = predict(dat_fourier6.lgb_obj, data = as.matrix(dat_fourier6.lgb_train_rules$data))
+cor(dat_fourier6.lgb_train_pred, y, method="pearson")
+# 0.9864008 (nrounds = 4411)
+
+dat_fourier6.lgb_test_pred = predict(dat_fourier6.lgb_obj, data = dat_fourier6.lgb_test_matrix)
+
+cor(dat_fourier6.lgb_test_pred, y_test, method="pearson")
+# 0.6831888
+
+mean((dat_fourier6.lgb_test_pred - y_test)^2)
+# 0.1090212
+```
+
+We get test prediction correlation of 0.6831888 and MSE of 0.1090212
+
+```{r}
+dat_fourier6.feature_importance = as.data.frame(lgb.importance(dat_fourier6.lgb_obj)) %>%
+  mutate(Feature = fct_rev(fct_inorder(Feature))) %>%
+  dplyr::slice(1:50) %>%
+  ggplot(aes(x = Feature, y = Gain)) +
+  geom_col(fill = "dodgerblue") +
+  coord_flip() +
+  theme_bw()
+dat_fourier6.feature_importance
+```
+
+
+# Inputs: All Fourier Amp/Phase Features Based on Dinucleotides
+
+```{r}
+Xtwo_di_fourier_mag = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_di_fourier_mag.rds")
+Xtwo_di_fourier_phase = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_di_fourier_phase.rds")
+Xtwo_diminusdi_fourier_mag = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diminusdi_fourier_mag.rds")
+Xtwo_diminusdi_fourier_phase = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diminusdi_fourier_phase.rds")
+Xtwo_diordi_fourier_mag = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diordi_fourier_mag.rds")
+Xtwo_diordi_fourier_phase = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diordi_fourier_phase.rds")
+Xtwo_diordiordiordi_fourier_mag = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diordiordiordi_fourier_mag.rds")
+Xtwo_diordiordiordi_fourier_phase = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diordiordiordi_fourier_phase.rds")
+
+Xtwo_di_fourier_mag_test = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_di_fourier_mag_test.rds")
+Xtwo_di_fourier_phase_test = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_di_fourier_phase_test.rds")
+Xtwo_diminusdi_fourier_mag_test = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diminusdi_fourier_mag_test.rds")
+Xtwo_diminusdi_fourier_phase_test = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diminusdi_fourier_phase_test.rds")
+Xtwo_diordi_fourier_mag_test = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diordi_fourier_mag_test.rds")
+Xtwo_diordi_fourier_phase_test = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diordi_fourier_phase_test.rds")
+Xtwo_diordiordiordi_fourier_mag_test = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diordiordiordi_fourier_mag_test.rds")
+Xtwo_diordiordiordi_fourier_phase_test = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diordiordiordi_fourier_phase_test.rds")
+```
+
+## Simple Linear Model
+
+```{r}
+dat_fourier_all_di = cbind(Xtwo_di_fourier_mag, Xtwo_di_fourier_phase,
+                           Xtwo_diminusdi_fourier_mag, Xtwo_diminusdi_fourier_phase,
+                           Xtwo_diordi_fourier_mag, Xtwo_diordi_fourier_phase,
+                           Xtwo_diordiordiordi_fourier_mag, Xtwo_diordiordiordi_fourier_phase,
+                           dat %>% select(DNAcycP_post_smooth_5bp))
+# dat_fourier_all_di = cbind(Xtwo_di_fourier_mag,
+#                         Xtwo_diminusdi_fourier_mag,
+#                         dat %>% select(all_of(trinucleotides), DNAcycP_post_smooth_5bp))
+
+fourier_all_di_lm = lm(DNAcycP_post_smooth_5bp~., data=dat_fourier_all_di)
+cor(fourier_all_di_lm$fitted.values, y)
+# 0.6477935
+
+dat_test_fourier_all_di = cbind(Xtwo_di_fourier_mag_test, Xtwo_di_fourier_phase_test,
+                                Xtwo_diminusdi_fourier_mag_test, Xtwo_diminusdi_fourier_phase_test,
+                                Xtwo_diordi_fourier_mag_test, Xtwo_diordi_fourier_phase_test,
+                                Xtwo_diordiordiordi_fourier_mag_test, Xtwo_diordiordiordi_fourier_phase_test,
+                                dat_test %>% select(DNAcycP_post_smooth_5bp))
+# dat_test_fourier_all_di = cbind(Xtwo_di_fourier_mag_test,
+#                              Xtwo_diminusdi_fourier_mag_test,
+#                              dat_test %>% select(all_of(trinucleotides), DNAcycP_post_smooth_5bp))
+
+fourier_all_di_pred = predict(fourier_all_di_lm, dat_test_fourier_all_di)
+
+cor(fourier_all_di_pred, y_test)
+# 0.6163597
+
+mean((fourier_all_di_pred - y_test)^2)
+# 0.1262226
+```
+
+We get test prediction correlation of 0.6163597 and MSE of 0.1262226
+
+## LightGBM (tree-based) Model
+
+```{r}
+library(lightgbm)
+source("scripts/functions/lgbm-helper-functions.R")
+set.seed(50)
+dat_fourier_all_di.lgb_train_set = dat_fourier_all_di %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_fourier_all_di.lgb_train_rules = lgb.convert_with_rules(data = dat_fourier_all_di.lgb_train_set)
+dat_fourier_all_di.lgb_train_data = lgb.Dataset(data = as.matrix(dat_fourier_all_di.lgb_train_rules$data),
+                                                label = dat_fourier_all_di$DNAcycP_post_smooth_5bp,
+                                                categorical_feature = handle_categorical(colnames(dat_fourier_all_di.lgb_train_rules$data)))
+dat_fourier_all_di.lgb_test_set = dat_test_fourier_all_di %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_fourier_all_di.lgb_test_matrix = as.matrix(lgb.convert_with_rules(data = dat_fourier_all_di.lgb_test_set, rules = dat_fourier_all_di.lgb_train_rules$rules)$data)
+dat_fourier_all_di.lgb_test_data = lgb.Dataset(data = dat_fourier_all_di.lgb_test_matrix,
+                                               label = dat_test_fourier_all_di$DNAcycP_post_smooth_5bp,
+                                               categorical_feature = handle_categorical(colnames(dat_fourier_all_di.lgb_test_matrix)))
+dat_fourier_all_di.lgb_obj = lightgbm(data = dat_fourier_all_di.lgb_train_data,
+                                      params = list(learning_rate = c(0.1),
+                                                    objective = c("regression"),
+                                                    min_data_in_leaf = 100,
+                                                    max_depth = c(5),
+                                                    num_leaves = c(1000),
+                                                    lambda_l2 = c(1),
+                                                    boosting = c("gbdt")),
+                                      valids = list(valid = dat_fourier_all_di.lgb_test_data),
+                                      nrounds = 32000,
+                                      early_stopping_rounds = 50)
+
+dat_fourier_all_di.lgb_train_pred = predict(dat_fourier_all_di.lgb_obj, data = as.matrix(dat_fourier_all_di.lgb_train_rules$data))
+cor(dat_fourier_all_di.lgb_train_pred, y, method="pearson")
+# 0.9958794 (nrounds = 3985)
+
+dat_fourier_all_di.lgb_test_pred = predict(dat_fourier_all_di.lgb_obj, data = dat_fourier_all_di.lgb_test_matrix)
+
+cor(dat_fourier_all_di.lgb_test_pred, y_test, method="pearson")
+# 0.7801241
+
+mean((dat_fourier_all_di.lgb_test_pred - y_test)^2)
+# 0.08026103
+```
+
+We get test prediction correlation of 0.7801241 and MSE of 0.08026103
+
+```{r}
+dat_fourier_all_di.feature_importance = as.data.frame(lgb.importance(dat_fourier_all_di.lgb_obj)) %>%
+  mutate(Feature = fct_rev(fct_inorder(Feature))) %>%
+  dplyr::slice(1:50) %>%
+  ggplot(aes(x = Feature, y = Gain)) +
+  geom_col(fill = "dodgerblue") +
+  coord_flip() +
+  theme_bw()
+dat_fourier_all_di.feature_importance
+```
+
+# Inputs: All Fourier Amp/Phase Features
+
+```{r}
+Xone_nuc_fourier_mag = readRDS("data/Created/chrV_post_smooth_C0_Xone_nuc_fourier_mag.rds")
+Xone_nuc_fourier_phase = readRDS("data/Created/chrV_post_smooth_C0_Xone_nuc_fourier_phase.rds")
+Xone_nucminusnuc_fourier_mag = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucminusnuc_fourier_mag.rds")
+Xone_nucminusnuc_fourier_phase = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucminusnuc_fourier_phase.rds")
+Xone_nucornuc_fourier_mag = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucornuc_fourier_mag.rds")
+Xone_nucornuc_fourier_phase = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucornuc_fourier_phase.rds")
+Xtwo_di_fourier_mag = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_di_fourier_mag.rds")
+Xtwo_di_fourier_phase = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_di_fourier_phase.rds")
+Xtwo_diminusdi_fourier_mag = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diminusdi_fourier_mag.rds")
+Xtwo_diminusdi_fourier_phase = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diminusdi_fourier_phase.rds")
+Xtwo_diordi_fourier_mag = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diordi_fourier_mag.rds")
+Xtwo_diordi_fourier_phase = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diordi_fourier_phase.rds")
+Xtwo_diordiordiordi_fourier_mag = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diordiordiordi_fourier_mag.rds")
+Xtwo_diordiordiordi_fourier_phase = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diordiordiordi_fourier_phase.rds")
+
+Xone_nuc_fourier_mag_test = readRDS("data/Created/chrV_post_smooth_C0_Xone_nuc_fourier_mag_test.rds")
+Xone_nuc_fourier_phase_test = readRDS("data/Created/chrV_post_smooth_C0_Xone_nuc_fourier_phase_test.rds")
+Xone_nucminusnuc_fourier_mag_test = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucminusnuc_fourier_mag_test.rds")
+Xone_nucminusnuc_fourier_phase_test = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucminusnuc_fourier_phase_test.rds")
+Xone_nucornuc_fourier_mag_test = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucornuc_fourier_mag_test.rds")
+Xone_nucornuc_fourier_phase_test = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucornuc_fourier_phase_test.rds")
+Xtwo_di_fourier_mag_test = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_di_fourier_mag_test.rds")
+Xtwo_di_fourier_phase_test = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_di_fourier_phase_test.rds")
+Xtwo_diminusdi_fourier_mag_test = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diminusdi_fourier_mag_test.rds")
+Xtwo_diminusdi_fourier_phase_test = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diminusdi_fourier_phase_test.rds")
+Xtwo_diordi_fourier_mag_test = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diordi_fourier_mag_test.rds")
+Xtwo_diordi_fourier_phase_test = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diordi_fourier_phase_test.rds")
+Xtwo_diordiordiordi_fourier_mag_test = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diordiordiordi_fourier_mag_test.rds")
+Xtwo_diordiordiordi_fourier_phase_test = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diordiordiordi_fourier_phase_test.rds")
+```
+
+## Simple Linear Model
+
+```{r}
+dat_fourier_all = cbind(Xone_nuc_fourier_mag, Xone_nuc_fourier_phase,
+                        Xone_nucminusnuc_fourier_mag, Xone_nucminusnuc_fourier_phase,
+                        Xone_nucornuc_fourier_mag, Xone_nucornuc_fourier_phase,
+                        Xtwo_di_fourier_mag, Xtwo_di_fourier_phase,
+                        Xtwo_diminusdi_fourier_mag, Xtwo_diminusdi_fourier_phase,
+                        Xtwo_diordi_fourier_mag, Xtwo_diordi_fourier_phase,
+                        Xtwo_diordiordiordi_fourier_mag, Xtwo_diordiordiordi_fourier_phase,
+                        dat %>% select(DNAcycP_post_smooth_5bp))
+dat_fourier_all_C0 = cbind(Xone_nuc_fourier_mag, Xone_nuc_fourier_phase,
+                           Xone_nucminusnuc_fourier_mag, Xone_nucminusnuc_fourier_phase,
+                           Xone_nucornuc_fourier_mag, Xone_nucornuc_fourier_phase,
+                           Xtwo_di_fourier_mag, Xtwo_di_fourier_phase,
+                           Xtwo_diminusdi_fourier_mag, Xtwo_diminusdi_fourier_phase,
+                           Xtwo_diordi_fourier_mag, Xtwo_diordi_fourier_phase,
+                           Xtwo_diordiordiordi_fourier_mag, Xtwo_diordiordiordi_fourier_phase,
+                           dat %>% select(C0))
+
+fourier_all_lm = lm(DNAcycP_post_smooth_5bp~., data=dat_fourier_all)
+cor(fourier_all_lm$fitted.values, y)
+# 0.7005074
+cor(fourier_all_lm$fitted.values, dat$C0)
+# 0.5253337
+
+fourier_all_C0_lm = lm(C0~., data=dat_fourier_all_C0)
+cor(fourier_all_C0_lm$fitted.values, dat$C0)
+# 0.5510174
+cor(fourier_all_C0_lm$fitted.values, y)
+# 0.6678556
+
+
+dat_test_fourier_all = cbind(Xone_nuc_fourier_mag_test, Xone_nuc_fourier_phase_test,
+                             Xone_nucminusnuc_fourier_mag_test, Xone_nucminusnuc_fourier_phase_test,
+                             Xone_nucornuc_fourier_mag_test, Xone_nucornuc_fourier_phase_test,
+                             Xtwo_di_fourier_mag_test, Xtwo_di_fourier_phase_test,
+                             Xtwo_diminusdi_fourier_mag_test, Xtwo_diminusdi_fourier_phase_test,
+                             Xtwo_diordi_fourier_mag_test, Xtwo_diordi_fourier_phase_test,
+                             Xtwo_diordiordiordi_fourier_mag_test, Xtwo_diordiordiordi_fourier_phase_test,
+                             dat_test %>% select(DNAcycP_post_smooth_5bp))
+dat_test_fourier_all_C0 = cbind(Xone_nuc_fourier_mag_test, Xone_nuc_fourier_phase_test,
+                                Xone_nucminusnuc_fourier_mag_test, Xone_nucminusnuc_fourier_phase_test,
+                                Xone_nucornuc_fourier_mag_test, Xone_nucornuc_fourier_phase_test,
+                                Xtwo_di_fourier_mag_test, Xtwo_di_fourier_phase_test,
+                                Xtwo_diminusdi_fourier_mag_test, Xtwo_diminusdi_fourier_phase_test,
+                                Xtwo_diordi_fourier_mag_test, Xtwo_diordi_fourier_phase_test,
+                                Xtwo_diordiordiordi_fourier_mag_test, Xtwo_diordiordiordi_fourier_phase_test,
+                                dat_test %>% select(C0))
+
+fourier_all_pred = predict(fourier_all_lm, dat_test_fourier_all)
+fourier_all_C0_pred = predict(fourier_all_C0_lm, dat_test_fourier_all_C0)
+
+cor(fourier_all_pred, y_test)
+# 0.673659
+mean((fourier_all_pred - y_test)^2)
+# 0.1111239
+
+cor(fourier_all_pred, dat_test$C0)
+# 0.5072777
+mean((fourier_all_pred - dat_test$C0)^2)
+# 0.2166964
+
+cor(fourier_all_C0_pred, dat_test$C0)
+# 0.5058859
+mean((fourier_all_C0_pred - dat_test$C0)^2)
+# 0.2159358
+
+cor(fourier_all_C0_pred, y_test)
+# 0.6444482
+mean((fourier_all_C0_pred - y_test)^2)
+# 0.1188977
+
+cor(fourier_all_pred, fourier_all_C0_pred)
+# 0.9522838
+```
+
+We get test prediction correlation of 0.673659 and MSE of 0.1111239
+
+## LightGBM (tree-based) Model
+
+```{r}
+library(lightgbm)
+source("scripts/functions/lgbm-helper-functions.R")
+set.seed(50)
+dat_fourier_all.lgb_train_set = dat_fourier_all %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_fourier_all.lgb_train_rules = lgb.convert_with_rules(data = dat_fourier_all.lgb_train_set)
+dat_fourier_all.lgb_train_data = lgb.Dataset(data = as.matrix(dat_fourier_all.lgb_train_rules$data),
+                                             label = dat_fourier_all$DNAcycP_post_smooth_5bp,
+                                             categorical_feature = handle_categorical(colnames(dat_fourier_all.lgb_train_rules$data)))
+dat_fourier_all.lgb_test_set = dat_test_fourier_all %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_fourier_all.lgb_test_matrix = as.matrix(lgb.convert_with_rules(data = dat_fourier_all.lgb_test_set, rules = dat_fourier_all.lgb_train_rules$rules)$data)
+dat_fourier_all.lgb_test_data = lgb.Dataset(data = dat_fourier_all.lgb_test_matrix,
+                                            label = dat_test_fourier_all$DNAcycP_post_smooth_5bp,
+                                            categorical_feature = handle_categorical(colnames(dat_fourier_all.lgb_test_matrix)))
+dat_fourier_all.lgb_obj = lightgbm(data = dat_fourier_all.lgb_train_data,
+                                   params = list(learning_rate = c(0.1),
+                                                 objective = c("regression"),
+                                                 min_data_in_leaf = 100,
+                                                 max_depth = c(5),
+                                                 num_leaves = c(1000),
+                                                 lambda_l2 = c(1),
+                                                 boosting = c("gbdt")),
+                                   valids = list(valid = dat_fourier_all.lgb_test_data),
+                                   nrounds = 32000,
+                                   early_stopping_rounds = 50)
+
+dat_fourier_all.lgb_train_pred = predict(dat_fourier_all.lgb_obj, data = as.matrix(dat_fourier_all.lgb_train_rules$data))
+cor(dat_fourier_all.lgb_train_pred, y, method="pearson")
+# 0.9964947 (nrounds = 4100)
+
+dat_fourier_all.lgb_test_pred = predict(dat_fourier_all.lgb_obj, data = dat_fourier_all.lgb_test_matrix)
+
+cor(dat_fourier_all.lgb_test_pred, y_test, method="pearson")
+# 0.7984293
+
+mean((dat_fourier_all.lgb_test_pred - y_test)^2)
+# 0.07430836
+```
+
+We get test prediction correlation of 0.7984293 and MSE of 0.07430836
+
+```{r}
+dat_fourier_all.feature_importance = as.data.frame(lgb.importance(dat_fourier_all.lgb_obj)) %>%
+  mutate(Feature = fct_rev(fct_inorder(Feature))) %>%
+  dplyr::slice(1:50) %>%
+  ggplot(aes(x = Feature, y = Gain)) +
+  geom_col(fill = "dodgerblue") +
+  coord_flip() +
+  theme_bw()
+dat_fourier_all.feature_importance
+```
+
+
+# Inputs: Counts of Trinucleotides + All Fourier Amp/Phase Features
+
+```{r}
+nucleotides <- c("A", "C", "G", "T")
+dinucleotides <- gtools::permutations(n = 4, r = 2, v = nucleotides,
+                                      repeats.allowed = TRUE) %>%
+  apply(1, paste, collapse = "")
+trinucleotides <- gtools::permutations(n = 4, r = 3, v = nucleotides,
+                                       repeats.allowed = TRUE) %>%
+  apply(1, paste, collapse = "")
+
+Xone_nuc_fourier_mag = readRDS("data/Created/chrV_post_smooth_C0_Xone_nuc_fourier_mag.rds")
+Xone_nuc_fourier_phase = readRDS("data/Created/chrV_post_smooth_C0_Xone_nuc_fourier_phase.rds")
+Xone_nucminusnuc_fourier_mag = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucminusnuc_fourier_mag.rds")
+Xone_nucminusnuc_fourier_phase = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucminusnuc_fourier_phase.rds")
+Xone_nucornuc_fourier_mag = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucornuc_fourier_mag.rds")
+Xone_nucornuc_fourier_phase = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucornuc_fourier_phase.rds")
+Xtwo_di_fourier_mag = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_di_fourier_mag.rds")
+Xtwo_di_fourier_phase = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_di_fourier_phase.rds")
+Xtwo_diminusdi_fourier_mag = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diminusdi_fourier_mag.rds")
+Xtwo_diminusdi_fourier_phase = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diminusdi_fourier_phase.rds")
+Xtwo_diordi_fourier_mag = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diordi_fourier_mag.rds")
+Xtwo_diordi_fourier_phase = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diordi_fourier_phase.rds")
+Xtwo_diordiordiordi_fourier_mag = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diordiordiordi_fourier_mag.rds")
+Xtwo_diordiordiordi_fourier_phase = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diordiordiordi_fourier_phase.rds")
+
+Xone_nuc_fourier_mag_test = readRDS("data/Created/chrV_post_smooth_C0_Xone_nuc_fourier_mag_test.rds")
+Xone_nuc_fourier_phase_test = readRDS("data/Created/chrV_post_smooth_C0_Xone_nuc_fourier_phase_test.rds")
+Xone_nucminusnuc_fourier_mag_test = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucminusnuc_fourier_mag_test.rds")
+Xone_nucminusnuc_fourier_phase_test = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucminusnuc_fourier_phase_test.rds")
+Xone_nucornuc_fourier_mag_test = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucornuc_fourier_mag_test.rds")
+Xone_nucornuc_fourier_phase_test = readRDS("data/Created/chrV_post_smooth_C0_Xone_nucornuc_fourier_phase_test.rds")
+Xtwo_di_fourier_mag_test = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_di_fourier_mag_test.rds")
+Xtwo_di_fourier_phase_test = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_di_fourier_phase_test.rds")
+Xtwo_diminusdi_fourier_mag_test = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diminusdi_fourier_mag_test.rds")
+Xtwo_diminusdi_fourier_phase_test = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diminusdi_fourier_phase_test.rds")
+Xtwo_diordi_fourier_mag_test = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diordi_fourier_mag_test.rds")
+Xtwo_diordi_fourier_phase_test = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diordi_fourier_phase_test.rds")
+Xtwo_diordiordiordi_fourier_mag_test = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diordiordiordi_fourier_mag_test.rds")
+Xtwo_diordiordiordi_fourier_phase_test = readRDS("data/Created/chrV_post_smooth_C0_Xtwo_diordiordiordi_fourier_phase_test.rds")
+```
+
+## Simple Linear Model
+
+```{r}
+dat_fourier_all_2 = cbind(Xone_nuc_fourier_mag, Xone_nuc_fourier_phase,
+                          Xone_nucminusnuc_fourier_mag, Xone_nucminusnuc_fourier_phase,
+                          Xone_nucornuc_fourier_mag, Xone_nucornuc_fourier_phase,
+                          Xtwo_di_fourier_mag, Xtwo_di_fourier_phase,
+                          Xtwo_diminusdi_fourier_mag, Xtwo_diminusdi_fourier_phase,
+                          Xtwo_diordi_fourier_mag, Xtwo_diordi_fourier_phase,
+                          Xtwo_diordiordiordi_fourier_mag, Xtwo_diordiordiordi_fourier_phase,
+                          dat %>% select(all_of(trinucleotides), DNAcycP_post_smooth_5bp))
+fourier_all_2_lm = lm(DNAcycP_post_smooth_5bp~., data=dat_fourier_all_2)
+cor(fourier_all_2_lm$fitted.values, y)
+# 0.7062046
+
+dat_test_fourier_all_2 = cbind(Xone_nuc_fourier_mag_test, Xone_nuc_fourier_phase_test,
+                               Xone_nucminusnuc_fourier_mag_test, Xone_nucminusnuc_fourier_phase_test,
+                               Xone_nucornuc_fourier_mag_test, Xone_nucornuc_fourier_phase_test,
+                               Xtwo_di_fourier_mag_test, Xtwo_di_fourier_phase_test,
+                               Xtwo_diminusdi_fourier_mag_test, Xtwo_diminusdi_fourier_phase_test,
+                               Xtwo_diordi_fourier_mag_test, Xtwo_diordi_fourier_phase_test,
+                               Xtwo_diordiordiordi_fourier_mag_test, Xtwo_diordiordiordi_fourier_phase_test,
+                               dat_test %>% select(all_of(trinucleotides), DNAcycP_post_smooth_5bp))
+
+fourier_all_2_pred = predict(fourier_all_2_lm, dat_test_fourier_all_2)
+
+cor(fourier_all_2_pred, y_test)
+# 0.6767937
+
+mean((fourier_all_2_pred - y_test)^2)
+# 0.1103127
+```
+
+We get test prediction correlation of 0.6767937 and MSE of 0.1103127
+
+## LightGBM (tree-based) Model
+
+```{r}
+library(lightgbm)
+source("scripts/functions/lgbm-helper-functions.R")
+set.seed(50)
+dat_fourier_all_2.lgb_train_set = dat_fourier_all_2 %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_fourier_all_2.lgb_train_rules = lgb.convert_with_rules(data = dat_fourier_all_2.lgb_train_set)
+dat_fourier_all_2.lgb_train_data = lgb.Dataset(data = as.matrix(dat_fourier_all_2.lgb_train_rules$data),
+                                               label = dat_fourier_all_2$DNAcycP_post_smooth_5bp,
+                                               categorical_feature = handle_categorical(colnames(dat_fourier_all_2.lgb_train_rules$data)))
+dat_fourier_all_2.lgb_test_set = dat_test_fourier_all_2 %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_fourier_all_2.lgb_test_matrix = as.matrix(lgb.convert_with_rules(data = dat_fourier_all_2.lgb_test_set, rules = dat_fourier_all_2.lgb_train_rules$rules)$data)
+dat_fourier_all_2.lgb_test_data = lgb.Dataset(data = dat_fourier_all_2.lgb_test_matrix,
+                                              label = dat_test_fourier_all_2$DNAcycP_post_smooth_5bp,
+                                              categorical_feature = handle_categorical(colnames(dat_fourier_all_2.lgb_test_matrix)))
+dat_fourier_all_2.lgb_obj = lightgbm(data = dat_fourier_all_2.lgb_train_data,
+                                     params = list(learning_rate = c(0.1),
+                                                   objective = c("regression"),
+                                                   min_data_in_leaf = 100,
+                                                   max_depth = c(5),
+                                                   num_leaves = c(1000),
+                                                   lambda_l2 = c(1),
+                                                   boosting = c("gbdt")),
+                                     valids = list(valid = dat_fourier_all_2.lgb_test_data),
+                                     nrounds = 32000,
+                                     early_stopping_rounds = 50)
+
+dat_fourier_all_2.lgb_train_pred = predict(dat_fourier_all_2.lgb_obj, data = as.matrix(dat_fourier_all_2.lgb_train_rules$data))
+cor(dat_fourier_all_2.lgb_train_pred, y, method="pearson")
+# 0.9999102 (nrounds = 8500)
+
+dat_fourier_all_2.lgb_test_pred = predict(dat_fourier_all_2.lgb_obj, data = dat_fourier_all_2.lgb_test_matrix)
+
+cor(dat_fourier_all_2.lgb_test_pred, y_test, method="pearson")
+# 0.8069133
+
+mean((dat_fourier_all_2.lgb_test_pred - y_test)^2)
+# 0.07153615
+```
+
+We get test prediction correlation of 0.8069133 and MSE of 0.07153615
+
+```{r}
+dat_fourier_all_2.feature_importance = as.data.frame(lgb.importance(dat_fourier_all_2.lgb_obj)) %>%
+  mutate(Feature = fct_rev(fct_inorder(Feature))) %>%
+  dplyr::slice(1:50) %>%
+  ggplot(aes(x = Feature, y = Gain)) +
+  geom_col(fill = "dodgerblue") +
+  coord_flip() +
+  theme_bw()
+dat_fourier_all_2.feature_importance
+```
+
+
+
+
+
+# Inputs: BLANK
+
+```{r}
+
+```
+
+## Simple Linear Model
+
+```{r}
+dat_NAMEHERE = cbind(dat %>% select(DNAcycP_post_smooth_5bp))
+
+NAMEHERE_lm = lm(DNAcycP_post_smooth_5bp~., data=dat_NAMEHERE)
+cor(NAMEHERE_lm$fitted.values, y)
+# 
+
+dat_test_NAMEHERE = cbind(dat_test %>% select(DNAcycP_post_smooth_5bp))
+
+NAMEHERE_pred = predict(NAMEHERE_lm, dat_test_NAMEHERE)
+
+cor(NAMEHERE_pred, y_test)
+# 
+
+mean((NAMEHERE_pred - y_test)^2)
+# 
+```
+
+We get test prediction correlation of  and MSE of 
+
+## LightGBM (tree-based) Model
+
+```{r}
+library(lightgbm)
+source("scripts/functions/lgbm-helper-functions.R")
+set.seed(50)
+dat_NAMEHERE.lgb_train_set = dat_NAMEHERE %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_NAMEHERE.lgb_train_rules = lgb.convert_with_rules(data = dat_NAMEHERE.lgb_train_set)
+dat_NAMEHERE.lgb_train_data = lgb.Dataset(data = as.matrix(dat_NAMEHERE.lgb_train_rules$data),
+                                          label = dat_NAMEHERE$DNAcycP_post_smooth_5bp,
+                                          categorical_feature = handle_categorical(colnames(dat_NAMEHERE.lgb_train_rules$data)))
+dat_NAMEHERE.lgb_test_set = dat_test_NAMEHERE %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_NAMEHERE.lgb_test_matrix = as.matrix(lgb.convert_with_rules(data = dat_NAMEHERE.lgb_test_set, rules = dat_NAMEHERE.lgb_train_rules$rules)$data)
+dat_NAMEHERE.lgb_test_data = lgb.Dataset(data = dat_NAMEHERE.lgb_test_matrix,
+                                         label = dat_test_NAMEHERE$DNAcycP_post_smooth_5bp,
+                                         categorical_feature = handle_categorical(colnames(dat_NAMEHERE.lgb_test_matrix)))
+dat_NAMEHERE.lgb_obj = lightgbm(data = dat_NAMEHERE.lgb_train_data,
+                                params = list(learning_rate = c(0.1),
+                                              objective = c("regression"),
+                                              min_data_in_leaf = 100,
+                                              max_depth = c(5),
+                                              num_leaves = c(1000),
+                                              lambda_l2 = c(1),
+                                              boosting = c("gbdt")),
+                                valids = list(valid = dat_NAMEHERE.lgb_test_data),
+                                nrounds = 32000,
+                                early_stopping_rounds = 50)
+
+dat_NAMEHERE.lgb_train_pred = predict(dat_NAMEHERE.lgb_obj, data = as.matrix(dat_NAMEHERE.lgb_train_rules$data))
+cor(dat_NAMEHERE.lgb_train_pred, y, method="pearson")
+#  (nrounds = )
+
+dat_NAMEHERE.lgb_test_pred = predict(dat_NAMEHERE.lgb_obj, data = dat_NAMEHERE.lgb_test_matrix)
+
+cor(dat_NAMEHERE.lgb_test_pred, y_test, method="pearson")
+# 
+
+mean((dat_NAMEHERE.lgb_test_pred - y_test)^2)
+# 
+```
+
+We get test prediction correlation of  and MSE of 
+
+```{r}
+dat_NAMEHERE.feature_importance = as.data.frame(lgb.importance(dat_NAMEHERE.lgb_obj)) %>%
+  mutate(Feature = fct_rev(fct_inorder(Feature))) %>%
+  dplyr::slice(1:50) %>%
+  ggplot(aes(x = Feature, y = Gain)) +
+  geom_col(fill = "dodgerblue") +
+  coord_flip() +
+  theme_bw()
+dat_NAMEHERE.feature_importance
+```
+
+
+# Inputs: HRI Only
+
+```{r}
+HRI = readRDS("data/Created/chrV_post_smooth_C0_HRI.rds")
+HRI_test = readRDS("data/Created/chrV_post_smooth_C0_HRI_test.rds")
+```
+
+## Simple Linear Model
+
+```{r}
+dat_HRI = cbind(HRI, dat %>% select(DNAcycP_post_smooth_5bp))
+
+HRI_lm = lm(DNAcycP_post_smooth_5bp~., data=dat_HRI)
+cor(HRI_lm$fitted.values, y)
+# 0.5028832
+
+dat_test_HRI = cbind(HRI_test, dat_test %>% select(DNAcycP_post_smooth_5bp))
+
+HRI_pred = predict(HRI_lm, dat_test_HRI)
+
+cor(HRI_pred, y_test)
+# 0.5055715
+
+mean((HRI_pred - y_test)^2)
+# 0.1512288
+```
+
+We get test prediction correlation of 0.5055715 and MSE of 0.1512288
+
+## LightGBM (tree-based) Model
+
+```{r}
+library(lightgbm)
+source("scripts/functions/lgbm-helper-functions.R")
+set.seed(50)
+dat_HRI.lgb_train_set = dat_HRI %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_HRI.lgb_train_rules = lgb.convert_with_rules(data = dat_HRI.lgb_train_set)
+dat_HRI.lgb_train_data = lgb.Dataset(data = as.matrix(dat_HRI.lgb_train_rules$data),
+                                     label = dat_HRI$DNAcycP_post_smooth_5bp,
+                                     categorical_feature = handle_categorical(colnames(dat_HRI.lgb_train_rules$data)))
+dat_HRI.lgb_test_set = dat_test_HRI %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_HRI.lgb_test_matrix = as.matrix(lgb.convert_with_rules(data = dat_HRI.lgb_test_set, rules = dat_HRI.lgb_train_rules$rules)$data)
+dat_HRI.lgb_test_data = lgb.Dataset(data = dat_HRI.lgb_test_matrix,
+                                    label = dat_test_HRI$DNAcycP_post_smooth_5bp,
+                                    categorical_feature = handle_categorical(colnames(dat_HRI.lgb_test_matrix)))
+dat_HRI.lgb_obj = lightgbm(data = dat_HRI.lgb_train_data,
+                           params = list(learning_rate = c(0.1),
+                                         objective = c("regression"),
+                                         min_data_in_leaf = 100,
+                                         max_depth = c(5),
+                                         num_leaves = c(1000),
+                                         lambda_l2 = c(1),
+                                         boosting = c("gbdt")),
+                           valids = list(valid = dat_HRI.lgb_test_data),
+                           nrounds = 32000,
+                           early_stopping_rounds = 50)
+
+dat_HRI.lgb_train_pred = predict(dat_HRI.lgb_obj, data = as.matrix(dat_HRI.lgb_train_rules$data))
+cor(dat_HRI.lgb_train_pred, y, method="pearson")
+# 0.9883504 (nrounds = 15494)
+
+dat_HRI.lgb_test_pred = predict(dat_HRI.lgb_obj, data = dat_HRI.lgb_test_matrix)
+
+cor(dat_HRI.lgb_test_pred, y_test, method="pearson")
+# 0.7766371
+
+mean((dat_HRI.lgb_test_pred - y_test)^2)
+# 0.0808869
+```
+
+We get test prediction correlation of 0.7766371 and MSE of 0.0808869
+
+```{r}
+dat_HRI.feature_importance = as.data.frame(lgb.importance(dat_HRI.lgb_obj)) %>%
+  mutate(Feature = fct_rev(fct_inorder(Feature))) %>%
+  dplyr::slice(1:50) %>%
+  ggplot(aes(x = Feature, y = Gain)) +
+  geom_col(fill = "dodgerblue") +
+  coord_flip() +
+  theme_bw()
+dat_HRI.feature_importance
+```
+
+
+# Inputs: Counts of triuncleotides + HRI
+
+```{r}
+nucleotides <- c("A", "C", "G", "T")
+dinucleotides <- gtools::permutations(n = 4, r = 2, v = nucleotides,
+                                      repeats.allowed = TRUE) %>%
+  apply(1, paste, collapse = "")
+trinucleotides <- gtools::permutations(n = 4, r = 3, v = nucleotides,
+                                       repeats.allowed = TRUE) %>%
+  apply(1, paste, collapse = "")
+
+HRI = readRDS("data/Created/chrV_post_smooth_C0_HRI.rds")
+HRI_test = readRDS("data/Created/chrV_post_smooth_C0_HRI_test.rds")
+```
+
+## Simple Linear Model
+
+```{r}
+dat_HRI3 = cbind(dat %>% select(all_of(trinucleotides), DNAcycP_post_smooth_5bp), 
+                 HRI)
+
+HRI3_lm = lm(DNAcycP_post_smooth_5bp~., data=dat_HRI3)
+cor(HRI3_lm$fitted.values, y)
+# 0.5956988
+
+dat_test_HRI3 = cbind(dat_test %>% select(all_of(trinucleotides), DNAcycP_post_smooth_5bp),
+                      HRI_test)
+
+HRI3_pred = predict(HRI3_lm, dat_test_HRI3)
+
+cor(HRI3_pred, y_test)
+# 0.5905148
+
+mean((HRI3_pred - y_test)^2)
+# 0.1323079
+```
+
+We get test prediction correlation of 0.5905148 and MSE of 0.1323079
+
+## LightGBM (tree-based) Model
+
+```{r}
+library(lightgbm)
+source("scripts/functions/lgbm-helper-functions.R")
+set.seed(50)
+dat_HRI3.lgb_train_set = dat_HRI3 %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_HRI3.lgb_train_rules = lgb.convert_with_rules(data = dat_HRI3.lgb_train_set)
+dat_HRI3.lgb_train_data = lgb.Dataset(data = as.matrix(dat_HRI3.lgb_train_rules$data),
+                                      label = dat_HRI3$DNAcycP_post_smooth_5bp,
+                                      categorical_feature = handle_categorical(colnames(dat_HRI3.lgb_train_rules$data)))
+dat_HRI3.lgb_test_set = dat_test_HRI3 %>%
+  select(-DNAcycP_post_smooth_5bp)
+dat_HRI3.lgb_test_matrix = as.matrix(lgb.convert_with_rules(data = dat_HRI3.lgb_test_set, rules = dat_HRI3.lgb_train_rules$rules)$data)
+dat_HRI3.lgb_test_data = lgb.Dataset(data = dat_HRI3.lgb_test_matrix,
+                                     label = dat_test_HRI3$DNAcycP_post_smooth_5bp,
+                                     categorical_feature = handle_categorical(colnames(dat_HRI3.lgb_test_matrix)))
+dat_HRI3.lgb_obj = lightgbm(data = dat_HRI3.lgb_train_data,
+                            params = list(learning_rate = c(0.1),
+                                          objective = c("regression"),
+                                          min_data_in_leaf = 100,
+                                          max_depth = c(5),
+                                          # max_depth = c(8),
+                                          num_leaves = c(1000),
+                                          lambda_l2 = c(1),
+                                          boosting = c("gbdt")),
+                            valids = list(valid = dat_HRI3.lgb_test_data),
+                            nrounds = 32000,
+                            early_stopping_rounds = 50)
+
+dat_HRI3.lgb_train_pred = predict(dat_HRI3.lgb_obj, data = as.matrix(dat_HRI3.lgb_train_rules$data))
+cor(dat_HRI3.lgb_train_pred, y, method="pearson")
+# 0.9988595 (nrounds = 25087)
+
+dat_HRI3.lgb_test_pred = predict(dat_HRI3.lgb_obj, data = dat_HRI3.lgb_test_matrix)
+
+cor(dat_HRI3.lgb_test_pred, y_test, method="pearson")
+# 0.8537853 (max_depth=5)
+#  (max_depth=10)
+# 0.8587682 (max_depth=8)
+#  (max_depth=4)
+#  (max_depth=3)
+#  (max_depth=2)
+
+mean((dat_HRI3.lgb_test_pred - y_test)^2)
+# 0.05569449
+```
+
+We get test prediction correlation of 0.8537853 and MSE of 0.05569449
+
+```{r}
+dat_HRI3.feature_importance = as.data.frame(lgb.importance(dat_HRI3.lgb_obj)) %>%
+  mutate(Feature = fct_rev(fct_inorder(Feature))) %>%
+  dplyr::slice(1:50) %>%
+  ggplot(aes(x = Feature, y = Gain)) +
+  geom_col(fill = "dodgerblue") +
+  coord_flip() +
+  theme_bw()
+dat_HRI3.feature_importance
+```
+

@@ -1,0 +1,635 @@
+---
+title: "2-Post-tuning"
+author: "Brody Kendall"
+date: "2/23/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+```{r}
+library(tidyverse)
+library(lightgbm)
+library(markovchain)
+library(modelr)
+library(readxl)
+library(janitor)
+library(ggpubr)
+```
+
+
+```{r}
+#Sequence functions
+source("scripts/functions/sequence-functions.R")
+
+#Markov feature functions
+source("scripts/functions/markov-functions.R")
+
+#LGBM helper functions
+source("scripts/functions/lgbm-helper-functions.R")
+
+#Set seed for reproducibility
+set.seed(50)
+
+#Hyperparameter tuning results
+
+#Read
+# tuning_files_all <- list.files("./tuning", full.names = TRUE)
+# tuning_files_all <- list.files("./tuning/cycle3-only-di", full.names = TRUE)
+# tuning_files_all <- list.files("./tuning/cycle3", full.names = TRUE)
+# tuning_files_all <- list.files("./tuning/cycle5-spearman", full.names = TRUE)
+# tuning_files_all <- list.files("./tuning/cycle5-pearson-no-interaction", full.names = TRUE)
+tuning_files_all <- list.files("./tuning/cycle5-pearson-3711-interaction-10iterations", full.names = TRUE)
+# tuning_files_all <- list.files("./tuning/cycle5-pearson-3711-interaction-100iterations", full.names = TRUE)
+# tuning_files_all <- list.files("./tuning/RUNNING-cycle5-pearson-network-interaction-1iteration", full.names = TRUE)
+tuning_files_feat_sel_0 <- grep("hyperparameter-results-feat-sel-0-[0-9]+.csv", tuning_files_all, value = TRUE)
+tuning_files_feat_sel_0_no_ratio <- grep("hyperparameter-results-feat-sel-0-no-ratio-[0-9]+.csv", tuning_files_all, value = TRUE)
+tuning_files_feat_sel_001 <- grep("hyperparameter-results-feat-sel-001-[0-9]+.csv", tuning_files_all, value = TRUE)
+tuning_files_feat_sel_001_no_ratio <- grep("hyperparameter-results-feat-sel-001-no-ratio-[0-9]+.csv", tuning_files_all, value = TRUE)
+tuning_files_no_feat_sel <- grep("hyperparameter-results-no-feat-sel-[0-9]+.csv", tuning_files_all, value = TRUE)
+tuning_files_no_feat_sel_no_ratio <- grep("hyperparameter-results-no-feat-sel-no-ratio-[0-9]+.csv", tuning_files_all, value = TRUE)
+# tuning_files_feat_sel_0 <- grep("hyperparameter-results-feat-sel-0.csv", tuning_files_all, value = TRUE)
+# tuning_files_feat_sel_0_no_ratio <- grep("hyperparameter-results-feat-sel-0-no-ratio.csv", tuning_files_all, value = TRUE)
+# tuning_files_feat_sel_001 <- grep("hyperparameter-results-feat-sel-001.csv", tuning_files_all, value = TRUE)
+# tuning_files_feat_sel_001_no_ratio <- grep("hyperparameter-results-feat-sel-001-no-ratio.csv", tuning_files_all, value = TRUE)
+# tuning_files_no_feat_sel <- grep("hyperparameter-results-no-feat-sel.csv", tuning_files_all, value = TRUE)
+# tuning_files_no_feat_sel_no_ratio <- grep("hyperparameter-results-no-feat-sel-no-ratio.csv", tuning_files_all, value = TRUE)
+```
+
+```{r}
+tuning_results_feat_sel_0 <- tuning_files_feat_sel_0 %>%
+  map(read_csv, col_types = cols(
+    best_iterations = col_character(),
+    feat_freq = col_character())) %>%
+  bind_rows() %>%
+  mutate(inc_ratio = "yes",
+         feature_selection_level = "0")
+
+tuning_results_feat_sel_0_no_ratio <- tuning_files_feat_sel_0_no_ratio %>%
+  map(read_csv, col_types = cols(
+    best_iterations = col_character(),
+    feat_freq = col_character())) %>%
+  bind_rows() %>%
+  mutate(inc_ratio = "no",
+         feature_selection_level = "0")
+
+tuning_results_feat_sel_001 <- tuning_files_feat_sel_001 %>%
+  map(read_csv, col_types = cols(
+    best_iterations = col_character(),
+    feat_freq = col_character())) %>%
+  bind_rows() %>%
+  mutate(inc_ratio = "yes",
+         feature_selection_level = "001")
+
+tuning_results_feat_sel_001_no_ratio <- tuning_files_feat_sel_001_no_ratio %>%
+  map(read_csv, col_types = cols(
+    best_iterations = col_character(),
+    feat_freq = col_character())) %>%
+  bind_rows() %>%
+  mutate(inc_ratio = "no",
+         feature_selection_level = "001")
+
+tuning_results_no_feat_sel <- tuning_files_no_feat_sel %>%
+  map(read_csv, col_types = cols(
+    best_iterations = col_character(),
+    feat_freq = col_character())) %>%
+  bind_rows() %>%
+  mutate(inc_ratio = "yes",
+         feature_selection_level = "none")
+
+tuning_results_no_feat_sel_no_ratio <- tuning_files_no_feat_sel_no_ratio %>%
+  map(read_csv, col_types = cols(
+    best_iterations = col_character(),
+    feat_freq = col_character())) %>%
+  bind_rows() %>%
+  mutate(inc_ratio = "no",
+         feature_selection_level = "none")
+
+# #Combine
+# tuning_results <- tuning_results_feat_sel_0 %>%
+#   bind_rows(tuning_results_feat_sel_0_no_ratio,
+#             tuning_results_feat_sel_001,
+#             tuning_results_feat_sel_001_no_ratio,
+#             tuning_results_no_feat_sel,
+#             tuning_results_no_feat_sel_no_ratio) %>%
+#   arrange(desc(avg_spearman))
+
+#Combine
+# #Updated with Pearson correlation
+tuning_results <- tuning_results_feat_sel_0 %>%
+  bind_rows(tuning_results_feat_sel_0_no_ratio,
+            tuning_results_feat_sel_001,
+            tuning_results_feat_sel_001_no_ratio,
+            tuning_results_no_feat_sel,
+            tuning_results_no_feat_sel_no_ratio) %>%
+  arrange(desc(avg_pearson))
+```
+
+
+```{r}
+# #Identify top hyperparameter choice
+# top_parameters <- tuning_results %>%
+#   filter(avg_spearman == max(tuning_results$avg_spearman))
+
+#Identify top hyperparameter choice
+#Updated with Pearson correlation
+top_parameters <- tuning_results %>%
+  filter(avg_pearson == max(tuning_results$avg_pearson))
+
+top_parameters
+#ratio included, feature selection level 0
+
+#Identify top hyperparameter choice
+top_parameters_ratio <- tuning_results %>%
+  filter(inc_ratio == "yes") %>%
+  filter(row_number() == 1)
+
+top_parameters_ratio
+# ratio included, feature selection level 0
+```
+
+```{r}
+optim_parameters <- list(learning_rate = 0.1,
+                         objective = "regression",
+                         min_data = 200,
+                         max_bin = 120,
+                         max_depth = 4,
+                         num_leaves = 500,
+                         feature_fraction = 1,
+                         bagging_fraction = 0.3,
+                         lambda_l2 = 1,
+                         boosting = "gbdt",
+                         num_threads = 14)
+
+# optim_parameters <- list(learning_rate = 0.01,
+#                          objective = "regression",
+#                          min_data = 50,
+#                          max_bin = 60,
+#                          max_depth = -1,
+#                          num_leaves = 500,
+#                          feature_fraction = 0.1,
+#                          bagging_fraction = 0.6,
+#                          lambda_l2 = 0.1,
+#                          boosting = "gbdt",
+#                          num_threads = 14)
+
+iterations <- ceiling(top_parameters$avg_iterations)
+
+optim_parameters_ratio <- list(learning_rate = 0.1,
+                               objective = "regression",
+                               min_data = 200,
+                               max_bin = 120,
+                               max_depth = 4,
+                               num_leaves = 500,
+                               feature_fraction = 1,
+                               bagging_fraction = 0.3,
+                               lambda_l2 = 1,
+                               boosting = "gbdt",
+                               num_threads = 14)
+
+# iterations_ratio <- ceiling(top_parameters_ratio$avg_iterations)
+iterations_ratio <- ceiling(top_parameters$avg_iterations)
+```
+
+```{r message=FALSE, warning=FALSE}
+#Features
+nucleotides <- c("A", "C", "G", "T")
+ps1 <- paste0("X", 1:50, "mono")
+ps2 <- paste0("X", 1:49, "di")
+
+mono_int_indices = c(6,9,10,12,15,21)
+# int3 <- paste0("X", 1:47, "int3")
+# int7 <- paste0("X", 1:43, "int7")
+# int11 <- paste0("X", 1:39, "int11")
+
+di_int_indices = c(3,4,5,8,9,10,11,14,20)
+
+dinucleotides <- gtools::permutations(n = 4, r = 2, v = nucleotides,
+                                      repeats.allowed = TRUE) %>%
+  apply(1, paste, collapse = "")
+
+trinucleotides <- gtools::permutations(n = 4, r = 3, v = nucleotides,
+                                       repeats.allowed = TRUE) %>%
+  apply(1, paste, collapse = "")
+
+# psint3 <- paste0(gtools::permutations(n = 4, r = 2, v = nucleotides,
+#                                       repeats.allowed = TRUE) %>%
+#                    apply(1, paste, collapse = ""), "int3")
+# psint7 <- paste0(gtools::permutations(n = 4, r = 2, v = nucleotides,
+#                                       repeats.allowed = TRUE) %>%
+#                    apply(1, paste, collapse = ""), "int7")
+# psint11 <- paste0(gtools::permutations(n = 4, r = 2, v = nucleotides,
+#                                        repeats.allowed = TRUE) %>%
+#                     apply(1, paste, collapse = ""), "int11")
+
+thermo_feat <-c("tm1", "tm2", "tm3", "tm4", "grna_energy", "grna_scaffold_energy")
+
+# model_cols <- c(ps1, ps2, nucleotides, dinucleotides, trinucleotides, thermo_feat, "gc_count", "ratio_score_2nd")
+
+# model_cols <- c(ps1, ps2, nucleotides, dinucleotides, trinucleotides, thermo_feat, "gc_count")
+
+model_cols <- c(ps1, ps2, nucleotides, dinucleotides, trinucleotides, thermo_feat, "gc_count")
+
+for(i in mono_int_indices) {
+  model_cols <- c(model_cols, get(paste0("int", i)))
+}
+
+for(i in di_int_indices) {
+  model_cols <- c(model_cols, get(paste0("di_int", i)))
+}
+
+
+# model_cols <- c(ps1, ps2, nucleotides, dinucleotides, "gc_count", "ratio_score_2nd")
+
+write_csv(tibble(features = model_cols), "model/all-features.csv")
+
+write_csv(tibble(features = model_cols), "model/all-features.csv")
+write_csv(tibble(iterations = iterations), "model/iterations.csv")
+saveRDS(optim_parameters, "model/optim_parameters.rds")
+
+#Get optimal model and compare cross-validation results with those from Kim
+
+kfold_obj <- readRDS("data/Created/train-10-fold-ratio.rds")
+
+# kfold_obj_with_predictions <- lgb_cv_eval_2(kfold_obj = kfold_obj,
+#                                           feature_cols = model_cols,
+#                                           parameters = optim_parameters,
+#                                           n_rounds = 6000,
+#                                           early_stop = 50,
+#                                           feature_importance_threshold = NA)
+
+kfold_obj_with_predictions <- lgb_cv_eval_2(kfold_obj = kfold_obj,
+                                            feature_cols = model_cols,
+                                            parameters = optim_parameters,
+                                            n_rounds = 6000,
+                                            early_stop = 50)
+
+# kfold_obj_with_predictions2 <- lgb_cv_eval_2(kfold_obj = kfold_obj,
+#                                              feature_cols = model_cols,
+#                                              parameters = optim_parameters,
+#                                              n_rounds = 10,
+#                                              early_stop = 50)
+
+png(file="interpret_1.jpeg")
+lgb.plot.interpretation(kfold_obj_with_predictions$lgb_interpret$`1`[[1]])
+dev.off()
+png(file="interpret_2.jpeg")
+lgb.plot.interpretation(kfold_obj_with_predictions$lgb_interpret$`2`[[1]])
+dev.off()
+png(file="interpret_3.jpeg")
+lgb.plot.interpretation(kfold_obj_with_predictions2$lgb_interpret$`3`[[1]])
+dev.off()
+png(file="interpret_4.jpeg")
+lgb.plot.interpretation(kfold_obj_with_predictions2$lgb_interpret$`4`[[1]])
+dev.off()
+png(file="interpret_5.jpeg")
+lgb.plot.interpretation(kfold_obj_with_predictions2$lgb_interpret$`5`[[1]])
+dev.off()
+png(file="interpret_6.jpeg")
+lgb.plot.interpretation(kfold_obj_with_predictions2$lgb_interpret$`6`[[1]])
+dev.off()
+png(file="interpret_7.jpeg")
+lgb.plot.interpretation(kfold_obj_with_predictions2$lgb_interpret$`7`[[1]])
+dev.off()
+png(file="interpret_8.jpeg")
+lgb.plot.interpretation(kfold_obj_with_predictions2$lgb_interpret$`8`[[1]])
+dev.off()
+png(file="interpret_9.jpeg")
+lgb.plot.interpretation(kfold_obj_with_predictions2$lgb_interpret$`9`[[1]])
+dev.off()
+png(file="interpret_10.jpeg")
+lgb.plot.interpretation(kfold_obj_with_predictions2$lgb_interpret$`10`[[1]])
+dev.off()
+
+
+
+cv_eval_results <- lgb_cv_eval(kfold_obj = kfold_obj,
+                               feature_cols = model_cols,
+                               parameters = optim_parameters,
+                               n_rounds = 5,
+                               early_stop = 50)
+
+lgbm_mod = cv_eval_results$lgbm_mod
+
+features = cv_eval_results$features
+
+kfold_obj_2 = kfold_obj %>%
+  mutate(lgbm_mod = lgbm_mod,
+         features = features)
+
+
+# lgb_cv_interprete = kfold_obj_2 %>%
+#   mutate(test_set = map2(test, features, ~ .x[, .y]),
+#          test_rules = map(test_set, ~ lgb.convert_with_rules(data = .x)),
+#          test_data = map(test_rules, ~.x$data),
+#          test_lgb_obj = map2(test_data, test,
+#                              ~ lgb.Dataset(data = as.matrix(.x),
+#                                            label = .y$C0,
+#                                            categorical_feature = handle_categorical(model_cols))),
+#          lgb_interprete = map2(lgbm_mod, test_data, ~ lgb.interprete(.x, as.matrix(.y), idxset = nrow(.y))))
+
+lgb_cv_plot_interprete = lgb_cv_interprete %>%
+  mutate(lgb_cv_plot_interprete = map(lgb_interprete, ~ lgb.plot.interpretation(.x[[1]])))
+
+map(lgb_cv_interprete$lgb_interprete, ~lgb.plot.interpretation(.x[[1]]))
+
+
+map2(test, lgbm_mod, ~ lgb.interprete(lgbm_mod, test, idxset = 1:nrow(.x)))
+
+library(SHAPforxgboost)
+
+lgb_cv_shap = kfold_obj_2 %>%
+  mutate(test_set = map2(test, features, ~ .x[, .y]),
+         test_rules = map(test_set, ~ lgb.convert_with_rules(data = .x)),
+         test_data = map(test_rules, ~.x$data),
+         shap = map2(lgbm_mod, test_data, ~ shap.prep(xgb_model = .x, X_train = as.matrix(.y))))
+
+shap.plot.summary(lgb_cv_shap$shap$lgbm_mod.1)
+
+shap.plot.summary.wrap1(model = lgb_cv_shap$lgbm_mod$lgbm_mod.1, as.matrix(lgb_cv_shap$test_data$`1`), top_n=20)
+
+shap.plot.summary.wrap1(kfold_obj_with_predictions2$lgbm_mod$`1`, kfold_obj_with_predictions2$test_mat$`1`, top_n=20)
+
+shap.plot.summary.wrap1(kfold_obj_with_predictions$lgbm_mod$`1`, as.matrix(kfold_obj_with_predictions$initial_train_data$`1`[,kfold_obj_with_predictions$features$`1`]), top_n=20)
+
+# kfold_obj_with_predictions <- lgb_cv_eval_2(kfold_obj = kfold_obj,
+#                                           feature_cols = model_cols,
+#                                           parameters = optim_parameters,
+#                                           n_rounds = 6000,
+#                                           early_stop = 50,
+#                                           feature_importance_threshold = 0)
+
+model_cols_ratio <- c(ps1, ps2, int3, int7, int11, nucleotides, dinucleotides, trinucleotides, thermo_feat, "gc_count", "ratio_score_2nd")
+
+# model_cols_ratio <- c(ps1, ps2, nucleotides, dinucleotides, trinucleotides, thermo_feat, "gc_count", "ratio_score_2nd")
+
+kfold_obj_with_predictions_ratio <- lgb_cv_eval_2(kfold_obj = kfold_obj,
+                                                  feature_cols = model_cols_ratio,
+                                                  parameters = optim_parameters_ratio,
+                                                  n_rounds = 6000,
+                                                  early_stop = 50)
+
+# 
+# lgb_interpretation <- lgb_cv_interprete(kfold_obj = kfold_obj,
+#                                         feature_cols = model_cols)
+
+
+```
+
+```{r}
+# boostmec_confidence_intervals <- kfold_obj_with_predictions %>%
+#   mutate(test_set_n = map(test, ~nrow(.x))) %>%
+#   select(spearman_cor, test_set_n) %>%
+#   mutate_all(unlist) %>%
+#   mutate(lower_bound = tanh(atanh(spearman_cor) - qnorm(0.975)/sqrt(test_set_n - 3)),
+#          upper_bound = tanh(atanh(spearman_cor) + qnorm(0.975)/sqrt(test_set_n - 3)))
+
+#Updated with Pearson correlation
+boostmec_confidence_intervals <- kfold_obj_with_predictions %>%
+  mutate(test_set_n = map(test, ~nrow(.x))) %>%
+  select(pearson_cor, test_set_n) %>%
+  mutate_all(unlist) %>%
+  mutate(lower_bound = tanh(atanh(pearson_cor) - qnorm(0.975)/sqrt(test_set_n - 3)),
+         upper_bound = tanh(atanh(pearson_cor) + qnorm(0.975)/sqrt(test_set_n - 3)))
+
+boostmec_confidence_intervals
+# mean(boostmec_confidence_intervals$spearman_cor)
+
+#Updated with Pearson correlation
+mean(boostmec_confidence_intervals$pearson_cor)
+
+# boostmec_confidence_intervals_ratio <- kfold_obj_with_predictions_ratio %>%
+#   mutate(test_set_n = map(test, ~nrow(.x))) %>%
+#   select(spearman_cor, test_set_n) %>%
+#   mutate_all(unlist) %>%
+#   mutate(lower_bound = tanh(atanh(spearman_cor) - qnorm(0.975)/sqrt(test_set_n - 3)),
+#          upper_bound = tanh(atanh(spearman_cor) + qnorm(0.975)/sqrt(test_set_n - 3)))
+
+#Updated with Pearson correlation
+boostmec_confidence_intervals_ratio <- kfold_obj_with_predictions_ratio %>%
+  mutate(test_set_n = map(test, ~nrow(.x))) %>%
+  select(pearson_cor, test_set_n) %>%
+  mutate_all(unlist) %>%
+  mutate(lower_bound = tanh(atanh(pearson_cor) - qnorm(0.975)/sqrt(test_set_n - 3)),
+         upper_bound = tanh(atanh(pearson_cor) + qnorm(0.975)/sqrt(test_set_n - 3)))
+
+boostmec_confidence_intervals_ratio
+# mean(boostmec_confidence_intervals_ratio$spearman_cor)
+
+#Updated with Pearson correlation
+mean(boostmec_confidence_intervals_ratio$pearson_cor)
+```
+
+
+10-lgbm-model-2
+
+```{r}
+#Set seed for reproducibility
+set.seed(50)
+
+dat <- readRDS("data/Created/processed.rds")
+
+# cutoffs <- quantile(dat$C0, c(0.33, 0.67))
+cutoffs <- quantile(dat$C0, c(0.2, 0.8))
+
+
+dat_efficient <- dat[dat$C0 > cutoffs[2],]
+dat_inefficient <- dat[dat$C0 < cutoffs[1],]
+
+eff_mat_2nd <- position_specific_score_matrices(dat_efficient, order = 2)
+ineff_mat_2nd <- position_specific_score_matrices(dat_inefficient, order = 2)
+ratio_mat_2nd <- map2(eff_mat_2nd, ineff_mat_2nd, `-`)
+
+dat$ratio_score_2nd <- pssm_sum_score(dat, ratio_mat_2nd)
+
+saveRDS(ratio_mat_2nd, "model/ratio-matrices-order-2.rds")
+```
+
+
+```{r message=FALSE, warning=FALSE}
+initial_train_set <- dat[,model_cols]
+# initial_train_set <- dat[,model_cols_ratio]
+initial_train_rules <- lgb.convert_with_rules(initial_train_set)
+initial_train_data <- initial_train_rules$data
+initial_train_lgb_obj <- lgb.Dataset(data = as.matrix(initial_train_data),
+                                     label = dat$C0,
+                                     categorical_feature = handle_categorical(model_cols))
+# initial_train_lgb_obj <- lgb.Dataset(data = as.matrix(initial_train_data),
+#                                      label = dat$C0,
+#                                      categorical_feature = handle_categorical(model_cols_ratio))
+initial_mod = lgb.train(params = optim_parameters,
+                        data = initial_train_lgb_obj,
+                        nrounds = 500)
+# initial_mod = lgb.train(params = optim_parameters_ratio,
+#                         data = initial_train_lgb_obj,
+#                         nrounds = 500)
+feature_importance <- as.data.frame(lgb.importance(initial_mod))
+features <- feature_importance[feature_importance$Gain > 0, "Feature"]
+train_set <- dat[, features]
+train_rules <- lgb.convert_with_rules(train_set)
+train_lgb_obj <- lgb.Dataset(data = as.matrix(train_rules$data),
+                             label = dat$C0,
+                             categorical_feature = handle_categorical(colnames(train_rules$data)))
+lgbm_model <- lgb.train(params = optim_parameters,
+                        data = train_lgb_obj,
+                        nrounds = iterations)
+# lgbm_model <- lgb.train(params = optim_parameters_ratio,
+#                         data = train_lgb_obj,
+#                         nrounds = optim_iter)
+```
+
+
+
+```{r}
+ps1 <- paste0("X", 1:50, "mono")
+ps2 <- paste0("X", 1:49, "di")
+ps_original <- c(ps1, ps2)
+
+# ps1_new <- paste0("mono ", c(as.character(c((-4):(-1), 1:43)), paste0("+", as.character(1:3))))
+# ps2_new <- paste0("di ", c(as.character(c((-4):(-1), 1:43)), paste0("+", as.character(1:2))))
+# ps_new <- c(ps1_new, ps2_new)
+
+# ps_name_change <- tibble(original_name = ps_original, new_name = ps_new)
+# 
+# feature_importance <- feature_importance %>%
+#   left_join(ps_name_change, by = c("Feature" = "original_name")) %>%
+#   mutate(Feature = ifelse(is.na(new_name), Feature, new_name)) %>%
+#   select(-new_name)
+
+top_features_plot <- feature_importance %>%
+  mutate(Feature = fct_rev(fct_inorder(Feature))) %>%
+  dplyr::slice(1:20) %>%
+  ggplot(aes(x = Feature, y = Gain)) +
+  geom_col(fill = "dodgerblue") +
+  coord_flip() +
+  theme_bw()
+
+ggsave("figures/top-features.png", top_features_plot, width = 6, height = 4)
+```
+
+11-heatmap
+
+```{r}
+markov_scores <- readRDS("model/ratio-matrices-order-2.rds")
+
+markov_scores[[2]] %>%
+  as.data.frame() %>%
+  rownames_to_column() %>%
+  gather(-rowname, key = "key", value = "value") %>%
+  mutate(rowname = fct_rev(rowname)) %>%
+  filter(!is.nan(value)) %>%
+  ggplot(aes(x = key, y = rowname, fill = value)) +
+  geom_raster() +
+  scale_fill_gradient2()
+
+markov_scores_mats <- markov_scores[2:49]
+
+markov_df <- markov_scores_mats %>%
+  map(as.data.frame) %>%
+  map(rownames_to_column) %>%
+  map(~ gather(.x, -rowname, key = "colname", value = "score")) %>%
+  map(~ mutate(.x, colname = substring(colname, 2, 2))) %>%
+  map(~ mutate(.x, rowname = fct_rev(rowname))) %>%
+  map(~ filter(.x, !is.nan(score))) %>%
+  bind_rows(.id = "position")
+
+markov_matrix_heatmap <- markov_df %>%
+  mutate(position = paste0(as.integer(position)-4, " : ", as.integer(position)-2),
+         position = ifelse(position == "-3 : -1", "-4 : -2",
+                           ifelse(position == "-2 : 0", "-3 : -1",
+                                  ifelse(position == "-1 : 1", "-2 : 1",
+                                         ifelse(position == "0 : 2", "-1 : 2",
+                                                ifelse(position == "42 : 44", "42 : +1",
+                                                       ifelse(position == "43 : 45", "43 : +2",
+                                                              ifelse(position == "44 : 46", "+1 : +3", position))))))),
+         position = fct_inorder(position)) %>%
+  ggplot(aes(x = colname, y = rowname, fill = score)) +
+  geom_raster() +
+  scale_fill_gradient2() +
+  facet_wrap(~position) +
+  ylab("Dinucleotide start") +
+  xlab("Transition nucleotide")
+
+markov_df %>%
+  group_by(rowname, colname) %>%
+  summarize(mean_score = mean(score)) %>%
+  arrange(desc(mean_score))
+
+markov_df %>%
+  arrange(desc(score))
+
+ggsave("figures/matrix_heatmap.pdf", markov_matrix_heatmap, width = 14, height = 14)
+```
+
+12-poly-T
+
+```{r}
+dat <- readRDS("data/Created/processed.rds")
+
+four_T_plus <- dat %>%
+  filter(grepl("TTTT+", x50mer))
+
+three_T_inclusive <- dat %>%
+  filter(grepl("TTT", x50mer))
+
+three_T <- three_T_inclusive %>%
+  setdiff(four_T_plus)
+
+dat_rest <- dat %>%
+  setdiff(four_T_plus) %>%
+  setdiff(three_T)
+
+dat_combined <- four_T_plus %>%
+  mutate(status = "TTTT+") %>%
+  bind_rows(three_T %>%
+              mutate(status = "TTT")) %>%
+  bind_rows(dat_rest %>%
+              mutate(status = "Other sgRNAs"))
+
+dat_combined %>%
+  group_by(status) %>%
+  summarize(mean_eff = mean(C0),
+            n = n())
+
+poly_t_boxplot <- dat_combined %>%
+  ggplot(aes(x = status, y = C0)) +
+  geom_boxplot(aes(fill = status)) +
+  stat_compare_means(comparisons = list(c("Other sgRNAs", "TTT"),
+                                        c("Other sgRNAs", "TTTT+"),
+                                        c("TTT", "TTTT+")),
+                     label = "p.signif", method = "t.test") +
+  ylab("Cleavage efficiency") +
+  xlab("sgRNA group") +
+  theme(legend.position = "none")
+
+poly_t_testing <- compare_means(C0 ~ status, data = dat_combined, method = "t.test")
+```
+
+13: Basic regressions
+
+```{r}
+dat.reg = dat[,c(model_cols, "C0")]
+TA.reg = lm(C0~TA, dat.reg)
+sqrt(summary(TA.reg)$r.squared)
+tm1.reg = lm(C0~tm1, dat.reg)
+sqrt(summary(tm1.reg)$r.squared)
+X33di.reg = lm(C0~X33di, dat.reg)
+sqrt(summary(X33di.reg)$r.squared)
+X29di.reg = lm(C0~X29di, dat.reg)
+sqrt(summary(X29di.reg)$r.squared)
+combo1.reg = lm(C0~TA+tm1+X33di+X29di, dat.reg)
+sqrt(summary(combo1.reg)$r.squared)
+combo1int.reg = lm(C0~TA*tm1*X33di*X29di, dat.reg)
+sqrt(summary(combo1int.reg)$r.squared)
+top20.reg = lm(C0~TA+tm1+X33di+X29di+X13di+X22di+X23di+X28di+X18di+X34di+
+                 X24di+X19di+X27di+gc_count+GGG+X44di+X17di+X7di+X12di+
+                 X39di, dat.reg)
+sqrt(summary(top20.reg)$r.squared)
+allmodelcols.reg = lm(C0~., dat.reg)
+sqrt(summary(allmodelcols.reg)$r.squared)
+
+
+```
