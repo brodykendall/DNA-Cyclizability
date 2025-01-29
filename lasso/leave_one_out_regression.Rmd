@@ -1,0 +1,272 @@
+---
+title: "Leave One Out Regressions"
+author: "Brody Kendall"
+date: "2023-04-25"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+FIXME
+
+# Conv_Only_Tri_5
+
+## Kernel 5 Only
+
+```{r}
+dat_first_conv.conv_only_tri_5$C0_new = y
+dat_test_first_conv.conv_only_tri_5$C0_new = y_test
+
+dat_first_conv.conv_only_tri_5.k5only = dat_first_conv.conv_only_tri_5 %>%
+  select(contains("feature5_"), C0_new)
+
+lm.model_first_conv.conv_only_tri_5.k5only = lm(C0_new~., data = dat_first_conv.conv_only_tri_5.k5only)
+
+# Prediction accuracy with train data:
+cor(lm.model_first_conv.conv_only_tri_5.k5only$fitted.values, y, method="pearson")
+# 
+mean((lm.model_first_conv.conv_only_tri_5.k5only$fitted.values - y)^2)
+# 
+
+# Predict values for test dataset:
+lm.model_first_conv.conv_only_tri_5.k5only.pred = predict(lm.model_first_conv.conv_only_tri_5.k5only, newdata = dat_test_first_conv.conv_only_tri_5)
+
+# Prediction accuracy with test data:
+cor(lm.model_first_conv.conv_only_tri_5.k5only.pred, y_test, method="pearson")
+# 
+mean((lm.model_first_conv.conv_only_tri_5.k5only.pred - y_test)^2)
+# 
+
+# Predict values for random test dataset:
+lm.model_first_conv.conv_only_tri_5.k5only.pred_random = predict(lm.model_first_conv.conv_only_tri_5.k5only, newdata = dat_first_conv_random_test.conv_only_tri_5)
+
+# Prediction accuracy with random test data:
+cor(lm.model_first_conv.conv_only_tri_5.k5only.pred_random, dat_random_test$C0_new, method="pearson")
+# 
+mean((lm.model_first_conv.conv_only_tri_5.k5only.pred_random - dat_random_test$C0_new)^2)
+# 
+```
+
+ on test,  on random
+
+
+
+# Conv_Only_Tri_5
+
+## Kernel 5 Only
+
+```{r}
+dat_first_conv.conv_only_tri_5$C0_new = y
+dat_test_first_conv.conv_only_tri_5$C0_new = y_test
+
+dat_first_conv.conv_only_tri_5.k5only = dat_first_conv.conv_only_tri_5 %>%
+  select(contains("feature5_"), C0_new)
+
+lm.model_first_conv.conv_only_tri_5.k5only = lm(C0_new~., data = dat_first_conv.conv_only_tri_5.k5only)
+
+# Prediction accuracy with train data:
+cor(lm.model_first_conv.conv_only_tri_5.k5only$fitted.values, y, method="pearson")
+# 0.5712181
+mean((lm.model_first_conv.conv_only_tri_5.k5only$fitted.values - y)^2)
+# 0.1632713
+
+# Predict values for test dataset:
+lm.model_first_conv.conv_only_tri_5.k5only.pred = predict(lm.model_first_conv.conv_only_tri_5.k5only, newdata = dat_test_first_conv.conv_only_tri_5)
+
+# Prediction accuracy with test data:
+cor(lm.model_first_conv.conv_only_tri_5.k5only.pred, y_test, method="pearson")
+# 0.5820002
+mean((lm.model_first_conv.conv_only_tri_5.k5only.pred - y_test)^2)
+# 0.1593737
+
+# Predict values for random test dataset:
+lm.model_first_conv.conv_only_tri_5.k5only.pred_random = predict(lm.model_first_conv.conv_only_tri_5.k5only, newdata = dat_first_conv_random_test.conv_only_tri_5)
+
+# Prediction accuracy with random test data:
+cor(lm.model_first_conv.conv_only_tri_5.k5only.pred_random, dat_random_test$C0_new, method="pearson")
+# 0.6186149
+mean((lm.model_first_conv.conv_only_tri_5.k5only.pred_random - dat_random_test$C0_new)^2)
+# 0.1183686
+```
+
+0.5820002 on test, 0.6186149 on random
+
+
+## Kernel 6 Only
+
+```{r}
+dat_first_conv.conv_only_tri_5$C0_new = y
+dat_test_first_conv.conv_only_tri_5$C0_new = y_test
+
+dat_first_conv.conv_only_tri_5.k6only = dat_first_conv.conv_only_tri_5 %>%
+  select(contains("feature6_"), C0_new)
+
+lm.model_first_conv.conv_only_tri_5.k6only = lm(C0_new~., data = dat_first_conv.conv_only_tri_5.k6only)
+
+# Prediction accuracy with train data:
+cor(lm.model_first_conv.conv_only_tri_5.k6only$fitted.values, y, method="pearson")
+# 0.4166871
+mean((lm.model_first_conv.conv_only_tri_5.k6only$fitted.values - y)^2)
+# 0.2002684
+
+# Predict values for test dataset:
+lm.model_first_conv.conv_only_tri_5.k6only.pred = predict(lm.model_first_conv.conv_only_tri_5.k6only, newdata = dat_test_first_conv.conv_only_tri_5)
+
+# Prediction accuracy with test data:
+cor(lm.model_first_conv.conv_only_tri_5.k6only.pred, y_test, method="pearson")
+# 0.419501
+mean((lm.model_first_conv.conv_only_tri_5.k6only.pred - y_test)^2)
+# 0.1985987
+
+# Predict values for random test dataset:
+lm.model_first_conv.conv_only_tri_5.k6only.pred_random = predict(lm.model_first_conv.conv_only_tri_5.k6only, newdata = dat_first_conv_random_test.conv_only_tri_5)
+
+# Prediction accuracy with random test data:
+cor(lm.model_first_conv.conv_only_tri_5.k6only.pred_random, dat_random_test$C0_new, method="pearson")
+# 0.3205626
+mean((lm.model_first_conv.conv_only_tri_5.k6only.pred_random - dat_random_test$C0_new)^2)
+# 0.1404406
+```
+
+0.419501 on test, 0.3205626 on random
+
+
+## Kernel 5 and 6
+
+```{r}
+dat_first_conv.conv_only_tri_5.k5and6 = dat_first_conv.conv_only_tri_5 %>%
+  select(contains("feature5_"), contains("feature6_"), C0_new)
+
+lm.model_first_conv.conv_only_tri_5.k5and6 = lm(C0_new~., data = dat_first_conv.conv_only_tri_5.k5and6)
+
+# Prediction accuracy with train data:
+cor(lm.model_first_conv.conv_only_tri_5.k5and6$fitted.values, y, method="pearson")
+# 0.6990192
+mean((lm.model_first_conv.conv_only_tri_5.k5and6$fitted.values - y)^2)
+# 0.1239293
+
+# Predict values for test dataset:
+lm.model_first_conv.conv_only_tri_5.k5and6.pred = predict(lm.model_first_conv.conv_only_tri_5.k5and6, newdata = dat_test_first_conv.conv_only_tri_5)
+
+# Prediction accuracy with test data:
+cor(lm.model_first_conv.conv_only_tri_5.k5and6.pred, y_test, method="pearson")
+# 0.7070231
+mean((lm.model_first_conv.conv_only_tri_5.k5and6.pred - y_test)^2)
+# 0.1205478
+
+# Predict values for random test dataset:
+lm.model_first_conv.conv_only_tri_5.k5and6.pred_random = predict(lm.model_first_conv.conv_only_tri_5.k5and6, newdata = dat_first_conv_random_test.conv_only_tri_5)
+
+# Prediction accuracy with random test data:
+cor(lm.model_first_conv.conv_only_tri_5.k5and6.pred_random, dat_random_test$C0_new, method="pearson")
+# 0.7090985
+mean((lm.model_first_conv.conv_only_tri_5.k5and6.pred_random - dat_random_test$C0_new)^2)
+# 0.07929155
+```
+
+0.7070231 on test, 0.7090985 on random
+
+```{r}
+summary(lm.model_first_conv.conv_only_tri_5.k5and6)
+```
+
+
+
+
+## Original:
+
+```{r}
+dat_first_conv.conv_only_tri$C0_new = y
+dat_test_first_conv.conv_only_tri$C0_new = y_test
+
+lm.model_first_conv.conv_only_tri = lm(C0_new~., data = dat_first_conv.conv_only_tri)
+
+# Prediction accuracy with train data:
+cor(lm.model_first_conv.conv_only_tri$fitted.values, y, method="pearson")
+# 0.8275571
+mean((lm.model_first_conv.conv_only_tri$fitted.values - y)^2)
+# 0.07637533
+
+# Predict values for test dataset:
+lm.model_first_conv.conv_only_tri.pred = predict(lm.model_first_conv.conv_only_tri, newdata = dat_test_first_conv.conv_only_tri)
+
+# Prediction accuracy with test data:
+cor(lm.model_first_conv.conv_only_tri.pred, y_test, method="pearson")
+# 0.8165551
+mean((lm.model_first_conv.conv_only_tri.pred - y_test)^2)
+# 0.08041748
+
+# Predict values for random test dataset:
+lm.model_first_conv.conv_only_tri.pred_random = predict(lm.model_first_conv.conv_only_tri, newdata = dat_first_conv_random_test.conv_only_tri)
+
+# Prediction accuracy with random test data:
+cor(lm.model_first_conv.conv_only_tri.pred_random, dat_random_test$C0_new, method="pearson")
+# 0.7485627
+mean((lm.model_first_conv.conv_only_tri.pred_random - dat_random_test$C0_new)^2)
+# 0.06762247
+```
+
+## Omit Kernel 19:
+
+```{r}
+dat_first_conv.conv_only_tri.no19 = dat_first_conv.conv_only_tri %>%
+  select(-contains("feature19_"))
+dat_test_first_conv.conv_only_tri.no19 = dat_test_first_conv.conv_only_tri %>%
+  select(-contains("feature19_"))
+
+lm.model_first_conv.conv_only_tri.no19 = lm(C0_new~., data = dat_first_conv.conv_only_tri.no19)
+
+# Prediction accuracy with train data:
+cor(lm.model_first_conv.conv_only_tri.no19$fitted.values, y, method="pearson")
+# 0.8083672
+mean((lm.model_first_conv.conv_only_tri.no19$fitted.values - y)^2)
+# 0.08398341
+
+# Predict values for test dataset:
+lm.model_first_conv.conv_only_tri.no19.pred = predict(lm.model_first_conv.conv_only_tri.no19, newdata = dat_test_first_conv.conv_only_tri.no19)
+
+# Prediction accuracy with test data:
+cor(lm.model_first_conv.conv_only_tri.no19.pred, y_test, method="pearson")
+# 0.7977079
+mean((lm.model_first_conv.conv_only_tri.no19.pred - y_test)^2)
+# 0.08776072
+
+# Predict values for random test dataset:
+dat_first_conv_random_test.conv_only_tri.no19 = dat_first_conv_random_test.conv_only_tri %>%
+  select(-contains("feature19_"))
+
+lm.model_first_conv.conv_only_tri.no19.pred_random = predict(lm.model_first_conv.conv_only_tri.no19, newdata = dat_first_conv_random_test.conv_only_tri.no19)
+
+# Prediction accuracy with random test data:
+cor(lm.model_first_conv.conv_only_tri.no19.pred_random, dat_random_test$C0_new, method="pearson")
+# 0.696895
+mean((lm.model_first_conv.conv_only_tri.no19.pred_random - dat_random_test$C0_new)^2)
+# 0.08012779
+```
+
+
+```{r}
+dat_first_conv.conv_only_tri.test = dat_first_conv.conv_only_tri %>%
+  select(contains("feature19_"), contains("feature31_"), contains("feature25_"), C0_new)
+
+lm.model_first_conv.conv_only_tri.test = lm(C0_new~., data = dat_first_conv.conv_only_tri.test)
+
+# Prediction accuracy with train data:
+cor(lm.model_first_conv.conv_only_tri.test$fitted.values, y, method="pearson")
+# 0.6317228
+mean((lm.model_first_conv.conv_only_tri.test$fitted.values - y)^2)
+# 0.1456324
+
+# Predict values for test dataset:
+lm.model_first_conv.conv_only_tri.test.pred = predict(lm.model_first_conv.conv_only_tri.test, newdata = dat_test_first_conv.conv_only_tri)
+
+# Prediction accuracy with test data:
+cor(lm.model_first_conv.conv_only_tri.test.pred, y_test, method="pearson")
+# 0.6366546
+mean((lm.model_first_conv.conv_only_tri.test.pred - y_test)^2)
+# 0.08776072
+```
+
+
