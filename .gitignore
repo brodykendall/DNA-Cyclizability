@@ -44,3 +44,5 @@ gnns/log_files/*
 gnns/models/*
 gnns/processed/*
 irlstm_architectures/results/*
+lgbm/results/*
+model/*.rds
