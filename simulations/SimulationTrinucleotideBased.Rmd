@@ -1,0 +1,123 @@
+---
+title: "SimulationTrinucleotideBased"
+author: "Brody Kendall"
+date: "8/8/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+marg.AAA = sum(dat$AAA)/(nrow(dat)*48)
+marg.AAT = sum(dat$AAT)/(nrow(dat)*48)
+marg.AAC = sum(dat$AAC)/(nrow(dat)*48)
+marg.AAG = sum(dat$AAG)/(nrow(dat)*48)
+marg.ATA = sum(dat$ATA)/(nrow(dat)*48)
+marg.ATT = sum(dat$ATT)/(nrow(dat)*48)
+marg.ATC = sum(dat$ATC)/(nrow(dat)*48)
+marg.ATG = sum(dat$ATG)/(nrow(dat)*48)
+marg.ACA = sum(dat$ACA)/(nrow(dat)*48)
+marg.ACT = sum(dat$ACT)/(nrow(dat)*48)
+marg.ACC = sum(dat$ACC)/(nrow(dat)*48)
+marg.ACG = sum(dat$ACG)/(nrow(dat)*48)
+marg.AGA = sum(dat$AGA)/(nrow(dat)*48)
+marg.AGT = sum(dat$AGT)/(nrow(dat)*48)
+marg.AGC = sum(dat$AGC)/(nrow(dat)*48)
+marg.AGG = sum(dat$AGG)/(nrow(dat)*48)
+marg.TAA = sum(dat$TAA)/(nrow(dat)*48)
+marg.TAT = sum(dat$TAT)/(nrow(dat)*48)
+marg.TAC = sum(dat$TAC)/(nrow(dat)*48)
+marg.TAG = sum(dat$TAG)/(nrow(dat)*48)
+marg.TTA = sum(dat$TTA)/(nrow(dat)*48)
+marg.TTT = sum(dat$TTT)/(nrow(dat)*48)
+marg.TTC = sum(dat$TTC)/(nrow(dat)*48)
+marg.TTG = sum(dat$TTG)/(nrow(dat)*48)
+marg.TCA = sum(dat$TCA)/(nrow(dat)*48)
+marg.TCT = sum(dat$TCT)/(nrow(dat)*48)
+marg.TCC = sum(dat$TCC)/(nrow(dat)*48)
+marg.TCG = sum(dat$TCG)/(nrow(dat)*48)
+marg.TGA = sum(dat$TGA)/(nrow(dat)*48)
+marg.TGT = sum(dat$TGT)/(nrow(dat)*48)
+marg.TGC = sum(dat$TGC)/(nrow(dat)*48)
+marg.TGG = sum(dat$TGG)/(nrow(dat)*48)
+marg.CAA = sum(dat$CAA)/(nrow(dat)*48)
+marg.CAT = sum(dat$CAT)/(nrow(dat)*48)
+marg.CAC = sum(dat$CAC)/(nrow(dat)*48)
+marg.CAG = sum(dat$CAG)/(nrow(dat)*48)
+marg.CTA = sum(dat$CTA)/(nrow(dat)*48)
+marg.CTT = sum(dat$CTT)/(nrow(dat)*48)
+marg.CTC = sum(dat$CTC)/(nrow(dat)*48)
+marg.CTG = sum(dat$CTG)/(nrow(dat)*48)
+marg.CCA = sum(dat$CCA)/(nrow(dat)*48)
+marg.CCT = sum(dat$CCT)/(nrow(dat)*48)
+marg.CCC = sum(dat$CCC)/(nrow(dat)*48)
+marg.CCG = sum(dat$CCG)/(nrow(dat)*48)
+marg.CGA = sum(dat$CGA)/(nrow(dat)*48)
+marg.CGT = sum(dat$CGT)/(nrow(dat)*48)
+marg.CGC = sum(dat$CGC)/(nrow(dat)*48)
+marg.CGG = sum(dat$CGG)/(nrow(dat)*48)
+marg.GAA = sum(dat$GAA)/(nrow(dat)*48)
+marg.GAT = sum(dat$GAT)/(nrow(dat)*48)
+marg.GAC = sum(dat$GAC)/(nrow(dat)*48)
+marg.GAG = sum(dat$GAG)/(nrow(dat)*48)
+marg.GTA = sum(dat$GTA)/(nrow(dat)*48)
+marg.GTT = sum(dat$GTT)/(nrow(dat)*48)
+marg.GTC = sum(dat$GTC)/(nrow(dat)*48)
+marg.GTG = sum(dat$GTG)/(nrow(dat)*48)
+marg.GCA = sum(dat$GCA)/(nrow(dat)*48)
+marg.GCT = sum(dat$GCT)/(nrow(dat)*48)
+marg.GCC = sum(dat$GCC)/(nrow(dat)*48)
+marg.GCG = sum(dat$GCG)/(nrow(dat)*48)
+marg.GGA = sum(dat$GGA)/(nrow(dat)*48)
+marg.GGT = sum(dat$GGT)/(nrow(dat)*48)
+marg.GGC = sum(dat$GGC)/(nrow(dat)*48)
+marg.GGG = sum(dat$GGG)/(nrow(dat)*48)
+
+marg.ps3 = c(marg.AAA, marg.AAC, marg.AAG, marg.AAT,
+             marg.ACA, marg.ACC, marg.ACG, marg.ACT,
+             marg.AGA, marg.AGC, marg.AGG, marg.AGT,
+             marg.ATA, marg.ATC, marg.ATG, marg.ATT,
+             marg.CAA, marg.CAC, marg.CAG, marg.CAT,
+             marg.CCA, marg.CCC, marg.CCG, marg.CCT,
+             marg.CGA, marg.CGC, marg.CGG, marg.CGT,
+             marg.CTA, marg.CTC, marg.CTG, marg.CTT,
+             marg.GAA, marg.GAC, marg.GAG, marg.GAT,
+             marg.GCA, marg.GCC, marg.GCG, marg.GCT,
+             marg.GGA, marg.GGC, marg.GGG, marg.GGT,
+             marg.GTA, marg.GTC, marg.GTG, marg.GTT,
+             marg.TAA, marg.TAC, marg.TAG, marg.TAT,
+             marg.TCA, marg.TCC, marg.TCG, marg.TCT,
+             marg.TGA, marg.TGC, marg.TGG, marg.TGT,
+             marg.TTA, marg.TTC, marg.TTG, marg.TTT)
+set.seed(50)
+# N number of simulations
+N = 10000
+# M number of sequences in each simulation
+M = 18533
+
+sim.sequences.ps3 <- vector("list", N)
+# Generate "sequences"
+sim.sequences.ps3 <- lapply(sim.sequences.ps3, function(x) {
+  matrix(nrow = M, ncol = 1, data = lapply(1:M, function(y) {
+    paste(c(sample(trinucleotides, 16, replace = TRUE, 
+                   prob = marg.ps3), 
+            sample(dinucleotides, 1, replace = TRUE, 
+                   prob = marg.ps2)),
+          collapse = "")
+  }))
+})
+
+sim.d.ps3 <- lapply(sim.sequences.ps3, function(x) {
+  lapply(x, function(y) {
+    y %>%
+      sequence_df()
+  })
+})
+
+
+# mutinformation(x[,1], x[,2])
+# })
+sim.MI.nc <- unlist(sim.MI.nc)
+```

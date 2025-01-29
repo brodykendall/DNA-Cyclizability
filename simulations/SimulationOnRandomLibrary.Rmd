@@ -1,0 +1,318 @@
+---
+title: "SimulationOnCycle3"
+author: "Brody Kendall"
+date: "7/21/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(igraph)
+library(infotheo)
+library(ggplot2)
+```
+
+```{r}
+cutoffs_0_25_random_library = quantile(dat_seq_random_library$C0, c(0, 0.25)) 
+cutoffs_25_50_random_library = quantile(dat_seq_random_library$C0, c(0.25, 0.5))
+cutoffs_50_75_random_library = quantile(dat_seq_random_library$C0, c(0.5, 0.75))
+cutoffs_75_100_random_library = quantile(dat_seq_random_library$C0, c(0.75, 1))
+```
+
+```{r}
+dat_q1_random_library = dat_seq_random_library %>%
+  filter(C0 >= cutoffs_0_25_random_library[1] & C0 <= cutoffs_0_25_random_library[2]) %>%
+  select(all_of(ps1), all_of(ps2), C0)
+
+d_q1_random_library = as.data.frame(matrix(nrow = 1225, ncol = 3))
+colnames(d_q1_random_library) = c("Var1", "Var2", "MI")
+z=1
+for(i in 1:49) {
+  for(j in (i+1):50) {
+    d_q1_random_library[z, "Var1"] = i
+    d_q1_random_library[z, "Var2"] = j
+    d_q1_random_library[z, "MI"] = mutinformation(dat_q1_random_library[,paste0("X", i, "mono")],
+                                                  dat_q1_random_library[,paste0("X", j, "mono")])
+    z=z+1
+  }
+}
+d_q1_random_library = d_q1_random_library %>%
+  arrange(desc(MI))
+```
+
+```{r}
+dat_q2_random_library = dat_seq_random_library %>%
+  filter(C0 >= cutoffs_25_50_random_library[1] & C0 <= cutoffs_25_50_random_library[2]) %>%
+  select(all_of(ps1), all_of(ps2), C0)
+
+d_q2_random_library = as.data.frame(matrix(nrow = 1225, ncol = 3))
+colnames(d_q2_random_library) = c("Var1", "Var2", "MI")
+z=1
+for(i in 1:49) {
+  for(j in (i+1):50) {
+    d_q2_random_library[z, "Var1"] = i
+    d_q2_random_library[z, "Var2"] = j
+    d_q2_random_library[z, "MI"] = mutinformation(dat_q2_random_library[,paste0("X", i, "mono")],
+                                                  dat_q2_random_library[,paste0("X", j, "mono")])
+    z=z+1
+  }
+}
+
+d_q2_random_library = d_q2_random_library %>%
+  arrange(desc(MI))
+```
+
+```{r}
+dat_q3_random_library = dat_seq_random_library %>%
+  filter(C0 >= cutoffs_50_75_random_library[1] & C0 <= cutoffs_50_75_random_library[2]) %>%
+  select(all_of(ps1), all_of(ps2), C0)
+
+d_q3_random_library = as.data.frame(matrix(nrow = 1225, ncol = 3))
+colnames(d_q3_random_library) = c("Var1", "Var2", "MI")
+z=1
+for(i in 1:49) {
+  for(j in (i+1):50) {
+    d_q3_random_library[z, "Var1"] = i
+    d_q3_random_library[z, "Var2"] = j
+    d_q3_random_library[z, "MI"] = mutinformation(dat_q3_random_library[,paste0("X", i, "mono")],
+                                                  dat_q3_random_library[,paste0("X", j, "mono")])
+    z=z+1
+  }
+}
+
+d_q3_random_library = d_q3_random_library %>%
+  arrange(desc(MI))
+```
+
+```{r}
+dat_q4_random_library = dat_seq_random_library %>%
+  filter(C0 >= cutoffs_75_100_random_library[1] & C0 <= cutoffs_75_100_random_library[2]) %>%
+  select(all_of(ps1), all_of(ps2), C0)
+
+d_q4_random_library = as.data.frame(matrix(nrow = 1225, ncol = 3))
+colnames(d_q4_random_library) = c("Var1", "Var2", "MI")
+z=1
+for(i in 1:49) {
+  for(j in (i+1):50) {
+    d_q4_random_library[z, "Var1"] = i
+    d_q4_random_library[z, "Var2"] = j
+    d_q4_random_library[z, "MI"] = mutinformation(dat_q4_random_library[,paste0("X", i, "mono")], dat_q4_random_library[,paste0("X", j, "mono")])
+    z=z+1
+  }
+}
+
+d_q4_random_library = d_q4_random_library %>%
+  arrange(desc(MI))
+```
+
+
+```{r}
+d_q1.nc_random_library = d_q1_random_library %>%
+  filter(Var2 - Var1 >= 3)
+d_q2.nc_random_library = d_q2_random_library %>%
+  filter(Var2 - Var1 >= 3)
+d_q3.nc_random_library = d_q3_random_library %>%
+  filter(Var2 - Var1 >= 3)
+d_q4.nc_random_library = d_q4_random_library %>%
+  filter(Var2 - Var1 >= 3)
+```
+
+```{r}
+d_q1.ps2_random_library = as.data.frame(matrix(nrow = 1176, ncol = 3))
+colnames(d_q1.ps2_random_library) = c("Var1", "Var2", "MI")
+z=1
+for(i in 1:48) {
+  for(j in (i+1):49) {
+    d_q1.ps2_random_library[z, "Var1"] = i
+    d_q1.ps2_random_library[z, "Var2"] = j
+    d_q1.ps2_random_library[z, "MI"] = mutinformation(dat_q1_random_library[,paste0("X", i, "di")],
+                                                      dat_q1_random_library[,paste0("X", j, "di")])
+    z=z+1
+  }
+}
+
+d_q1.ps2_random_library = d_q1.ps2_random_library %>%
+  arrange(desc(MI))
+```
+
+
+```{r}
+d_q2.ps2_random_library = as.data.frame(matrix(nrow = 1176, ncol = 3))
+colnames(d_q2.ps2_random_library) = c("Var1", "Var2", "MI")
+z=1
+for(i in 1:48) {
+  for(j in (i+1):49) {
+    d_q2.ps2_random_library[z, "Var1"] = i
+    d_q2.ps2_random_library[z, "Var2"] = j
+    d_q2.ps2_random_library[z, "MI"] = mutinformation(dat_q2_random_library[,paste0("X", i, "di")],
+                                                      dat_q2_random_library[,paste0("X", j, "di")])
+    z=z+1
+  }
+}
+
+d_q2.ps2_random_library = d_q2.ps2_random_library %>%
+  arrange(desc(MI))
+```
+
+```{r}
+d_q3.ps2_random_library = as.data.frame(matrix(nrow = 1176, ncol = 3))
+colnames(d_q3.ps2_random_library) = c("Var1", "Var2", "MI")
+z=1
+for(i in 1:48) {
+  for(j in (i+1):49) {
+    d_q3.ps2_random_library[z, "Var1"] = i
+    d_q3.ps2_random_library[z, "Var2"] = j
+    d_q3.ps2_random_library[z, "MI"] = mutinformation(dat_q3_random_library[,paste0("X", i, "di")],
+                                                      dat_q3_random_library[,paste0("X", j, "di")])
+    z=z+1
+  }
+}
+
+d_q3.ps2_random_library = d_q3.ps2_random_library %>%
+  arrange(desc(MI))
+```
+
+```{r}
+d_q4.ps2_random_library = as.data.frame(matrix(nrow = 1176, ncol = 3))
+colnames(d_q4.ps2_random_library) = c("Var1", "Var2", "MI")
+z=1
+for(i in 1:48) {
+  for(j in (i+1):49) {
+    d_q4.ps2_random_library[z, "Var1"] = i
+    d_q4.ps2_random_library[z, "Var2"] = j
+    d_q4.ps2_random_library[z, "MI"] = mutinformation(dat_q4_random_library[,paste0("X", i, "di")],
+                                                      dat_q4_random_library[,paste0("X", j, "di")])
+    z=z+1
+  }
+}
+
+d_q4.ps2_random_library = d_q4.ps2_random_library %>%
+  arrange(desc(MI))
+```
+
+```{r}
+d_q1.ps2_random_library = d_q1.ps2_random_library %>%
+  filter(Var2 - Var1 >= 3)
+d_q2.ps2_random_library = d_q2.ps2_random_library %>%
+  filter(Var2 - Var1 >= 3)
+d_q3.ps2_random_library = d_q3.ps2_random_library %>%
+  filter(Var2 - Var1 >= 3)
+d_q4.ps2_random_library = d_q4.ps2_random_library %>%
+  filter(Var2 - Var1 >= 3)
+```
+
+```{r}
+# Simulation Study on mutual information significance
+set.seed(50)
+# N number of simulations
+N = 10000
+# M number of "sequences" in each simulation
+M = 2806
+sim.sequences.nc_random_library <- vector("list", N)
+# Generate "sequences"
+sim.sequences.nc_random_library <- lapply(sim.sequences.nc_random_library, function(x) {
+  matrix(nrow = M, ncol = 2, data = sample(1:4, 2*M, replace = TRUE))
+})
+# Calculate mutual information for each sequence
+sim.MI.nc_random_library <- lapply(sim.sequences.nc_random_library, function(x) {
+  mutinformation(x[,1], x[,2])
+})
+sim.MI.nc_random_library <- unlist(sim.MI.nc_random_library)
+
+d_q1.nc.sim_random_library <- d_q1.nc_random_library %>%
+  mutate(pval = sapply(MI, function(x) {
+    sum(x < sim.MI.nc_random_library)/N
+  }))
+
+d_q2.nc.sim_random_library <- d_q2.nc_random_library %>%
+  mutate(pval = sapply(MI, function(x) {
+    sum(x < sim.MI.nc_random_library)/N
+  }))
+
+d_q3.nc.sim_random_library <- d_q3.nc_random_library %>%
+  mutate(pval = sapply(MI, function(x) {
+    sum(x < sim.MI.nc_random_library)/N
+  }))
+
+d_q4.nc.sim_random_library <- d_q4.nc_random_library %>%
+  mutate(pval = sapply(MI, function(x) {
+    sum(x < sim.MI.nc_random_library)/N
+  }))
+
+ggplot() +
+  geom_density(data=data.frame(Simulated = sim.MI.nc_random_library), aes(x = Simulated, color = "Simulated")) + 
+  geom_density(data = d_q1.nc.sim_random_library, aes(x = MI, color = "Q1")) + 
+  geom_density(data = d_q2.nc.sim_random_library, aes(x = MI, color = "Q2")) +
+  geom_density(data = d_q3.nc.sim_random_library, aes(x = MI, color = "Q3")) + 
+  geom_density(data = d_q4.nc.sim_random_library, aes(x = MI, color = "Q4"))
+
+## Total number of edges in each quartile: 1128
+nrow(d_q1.nc.sim_random_library)
+
+# Number of significant (alpha < .05) edges in each quartile:
+sum(d_q1.nc.sim_random_library$pval < .05) # 81
+sum(d_q2.nc.sim_random_library$pval < .05) # 71
+sum(d_q3.nc.sim_random_library$pval < .05) # 74
+sum(d_q4.nc.sim_random_library$pval < .05) # 108
+```
+
+```{r}
+set.seed(50)
+# N number of simulations
+N = 10000
+# M number of "sequences" in each simulation
+M = 2806
+sim.sequences.ps2_random_library <- vector("list", N)
+# Generate "sequences"
+sim.sequences.ps2_random_library <- lapply(sim.sequences.ps2_random_library, function(x) {
+  matrix(nrow = M, ncol = 2, data = sample(1:16, 2*M, replace = TRUE))
+})
+# Calculate mutual information for each sequence
+sim.MI.ps2_random_library <- lapply(sim.sequences.ps2_random_library, function(x) {
+  mutinformation(x[,1], x[,2])
+})
+sim.MI.ps2_random_library <- unlist(sim.MI.ps2_random_library)
+
+d_q1.ps2.sim_random_library <- d_q1.ps2_random_library %>%
+  mutate(pval = sapply(MI, function(x) {
+    sum(x < sim.MI.ps2_random_library)/N
+  }))
+
+d_q2.ps2.sim_random_library <- d_q2.ps2_random_library %>%
+  mutate(pval = sapply(MI, function(x) {
+    sum(x < sim.MI.ps2_random_library)/N
+  }))
+
+d_q3.ps2.sim_random_library <- d_q3.ps2_random_library %>%
+  mutate(pval = sapply(MI, function(x) {
+    sum(x < sim.MI.ps2_random_library)/N
+  }))
+
+d_q4.ps2.sim_random_library <- d_q4.ps2_random_library %>%
+  mutate(pval = sapply(MI, function(x) {
+    sum(x < sim.MI.ps2_random_library)/N
+  }))
+
+ggplot() +
+  geom_density(data=data.frame(Simulated = sim.MI.ps2_random_library), aes(x = Simulated, color = "Simulated")) + 
+  geom_density(data = d_q1.ps2.sim_random_library, aes(x = MI, color = "Q1")) + 
+  geom_density(data = d_q2.ps2.sim_random_library, aes(x = MI, color = "Q2")) +
+  geom_density(data = d_q3.ps2.sim_random_library, aes(x = MI, color = "Q3")) + 
+  geom_density(data = d_q4.ps2.sim_random_library, aes(x = MI, color = "Q4"))
+
+## Total number of edges in each quartile: 1081
+nrow(d_q1.ps2.sim_random_library)
+
+# Number of significant (alpha < .05) edges in each quartile:
+sum(d_q1.ps2.sim_random_library$pval < .05) # 88
+sum(d_q2.ps2.sim_random_library$pval < .05) # 49
+sum(d_q3.ps2.sim_random_library$pval < .05) # 61
+sum(d_q4.ps2.sim_random_library$pval < .05) # 108
+```
+
+
+
+
