@@ -36,3 +36,10 @@ drafts*
 figures_intermediate*
 dnacycp2_pred_timing.R
 *.Rproj
+*__pycache__*
+cnns/log_files/*
+cnns/models/*
+figures/for_paper/*
+gnns/log_files/*
+gnns/models/*
+gnns/processed/*
