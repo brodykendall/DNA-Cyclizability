@@ -43,3 +43,4 @@ figures/for_paper/*
 gnns/log_files/*
 gnns/models/*
 gnns/processed/*
+irlstm_architectures/results/*
