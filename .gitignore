@@ -4,6 +4,8 @@
 *.RData
 *.RDataTmp
 *.Rhistory
+*.DS_Store
+~$*
 deepbend*
 transformers*
 correlation_tracking*
@@ -33,3 +35,4 @@ notes*
 drafts*
 figures_intermediate*
 dnacycp2_pred_timing.R
+*.Rproj
