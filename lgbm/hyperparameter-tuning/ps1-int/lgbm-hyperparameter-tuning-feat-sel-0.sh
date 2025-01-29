@@ -1,0 +1,19 @@
+#!/bin/bash
+#SBATCH -A p31621
+#SBATCH -p long
+#SBATCH -t 168:00:00
+#SBATCH -N 1
+#SBATCH -n 10
+#SBATCH --array=1-20
+#SBATCH --error=arrayJob_%A_%a.err
+#SBATCH --output=arrayJob_%A_%a.out
+#SBATCH --export=NONE
+#SBATCH -J hyperparameter-tuning-no-fs
+#SBATCH --mem=128G
+
+module purge all
+
+module load R/4.1.0
+
+Rscript lgbm/hyperparameter-tuning/ps1-int/lgbm-hyperparameter-tuning-feat-sel-0.R ${SLURM_ARRAY_TASK_ID}
+
