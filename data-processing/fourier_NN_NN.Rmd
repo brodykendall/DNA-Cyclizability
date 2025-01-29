@@ -1,0 +1,71 @@
+---
+title: "Fourier coefficients and NN-NN"
+author: "Chong Jin"
+date: "01/26/2023"
+output:
+  html_document: default
+  toc: true
+theme: united
+---
+
+Fourier coefficient of N1N2 times the conjugate of Fourier coefficient of N3N4
+
+# Load data
+
+```{r}
+library(tidyverse)
+dat = readRDS("Data/processed_tiling_newC0.rds")
+dat_test = readRDS("Data/processed_tiling_test_newC0.rds")
+dat_random = readRDS("Data/processed_random_newC0.rds")
+dat_random_test = readRDS("Data/processed_random_test_newC0.rds")
+
+# pad the di and tri to length 50
+
+```
+
+# Inputs: Counts of dinucleotides
+
+```{r}
+dat_di = dat%>%
+  select(ends_with("di"), C0_new)
+
+di = lm(C0_new~., data=dat_di)
+cor(di$fitted.values, dat_di$C0_new)
+# 0.3769176
+
+dat_test_di = dat_test%>%
+  select(ends_with("di"), C0_new)
+di_pred = predict(di, dat_test_di)
+
+cor(di_pred, dat_test_di$C0_new)
+# 0.3690218
+
+mean((di_pred - dat_test_di$C0_new)^2)
+# 0.2082426
+```
+
+We get test prediction correlation of 0.3395826 and MSE of 0.2132197
+
+# Inputs: Counts of trinucleotides
+
+```{r}
+dat_tri = dat%>%
+  select(ends_with("tri"), C0_new)
+
+tri = lm(C0_new~., data=dat_tri)
+cor(tri$fitted.values, dat_tri$C0_new)
+# 0.362168
+
+dat_test_tri = dat_test%>%
+  select(ends_with("tri"), C0_new)
+tri_pred = predict(tri, dat_test_tri)
+
+cor(tri_pred, dat_test_tri$C0_new)
+# 0.3632816
+
+mean((tri_pred - dat_test_tri$C0_new)^2)
+# 0.2092263
+```
+
+We get test prediction correlation of 0.3632816 and MSE of 0.2092263
+
